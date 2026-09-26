@@ -224,3 +224,25 @@ def load_checkpoint(path, device="cpu") -> tuple[VoltCastNet, dict]:
     model = build_model(len(ck["cells"]), len(ck["features"]), ck["train_cfg"], ck["use_noa"])
     model.load_state_dict(ck["state_dict"])
     return model.to(device).eval(), ck
+
+
+# --------------------------------------------------------------------------- #
+# Inferencia
+# --------------------------------------------------------------------------- #
+@torch.no_grad()
+def predict_volts(model: VoltCastNet, vf_win, valid_win, ka_win, vc_win, sigma: float, cell_idx, el_flag,
+                  device="cpu"):
+    """Pronóstico en voltios para N celdas de un origen en un único forward pass.
+
+    Entradas ``[N, L]`` (numpy); devuelve (``V̂ [N, H]`` = ancla + σ_Δ · ŷ, ancla ``[N]``).
+    """
+    import numpy as np
+
+    from .dataset import build_inputs
+
+    def t(a, dtype=torch.float32):
+        return torch.as_tensor(np.asarray(a), dtype=dtype, device=device)
+
+    x, anc = build_inputs(t(np.nan_to_num(vf_win)), t(valid_win, torch.bool), t(ka_win), t(vc_win), sigma)
+    y = model.eval()(x, t(cell_idx, torch.long), t(el_flag))
+    return (anc[:, None] + sigma * y).cpu().numpy(), anc.cpu().numpy()

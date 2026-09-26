@@ -68,6 +68,16 @@ def validation_origins(split: dict, stride: int = config.EVAL_STRIDE) -> pd.Date
     return pd.date_range(ini, fin, freq=f"{stride}D", name="fecha_origen")
 
 
+def next_jump_index(dates: pd.DatetimeIndex, cells: list[str], saltos: pd.DataFrame) -> np.ndarray:
+    """``[T, C]``: índice (en ``dates``) del próximo salto de nivel posterior a cada fecha; ``2T`` si no hay."""
+    T, pos = len(dates), {d: i for i, d in enumerate(dates)}
+    nxt = np.full((T, len(cells)), 2 * T, dtype=np.int64)
+    for j, c in enumerate(cells):
+        for k in sorted((pos[d] for d in saltos.loc[saltos["celda"] == c, "fecha"] if d in pos), reverse=True):
+            nxt[:k, j] = k
+    return nxt
+
+
 # --------------------------------------------------------------------------- #
 # Tensores para el modelo (todo cabe en memoria de la GPU: ~2000 días × 362 celdas)
 # --------------------------------------------------------------------------- #
@@ -125,12 +135,7 @@ class SeriesTensors:
         """
         import torch
 
-        T, pos = len(self.dates), {d: i for i, d in enumerate(self.dates)}
-        nxt = np.full((T, len(self.cells)), 2 * T, dtype=np.int64)
-        for j, c in enumerate(self.cells):
-            for k in sorted((pos[d] for d in saltos.loc[saltos["celda"] == c, "fecha"] if d in pos), reverse=True):
-                nxt[:k, j] = k
-        self.next_jump = torch.tensor(nxt, device=self.device)
+        self.next_jump = torch.tensor(next_jump_index(self.dates, self.cells, saltos), device=self.device)
 
     def origins(self, t_min: int, t_max: int, stride: int = 1, phase: int = 0):
         """Pares (celda, t) usables con ``t_min ≤ t ≤ t_max`` y ``(t − phase) % stride == 0``."""
