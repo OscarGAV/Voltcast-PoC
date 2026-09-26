@@ -1,4 +1,6 @@
-# SYSTEM PROMPT: PoC MODELO PREDICTIVO VOLTCAST (JUPYTER / COLAB) — v3
+# SYSTEM PROMPT: PoC MODELO PREDICTIVO VOLTCAST (JUPYTER / COLAB) — v3.1
+
+> **Cambios v3.1** (tras el EDA del notebook 03): casos de celdas puenteadas corregidos, relación `[Volts]` / media corregida, nueva tabla de **saltos de nivel** en Silver (R9) y métricas separadas por orígenes que cruzan un salto en la evaluación.
 
 ## OBJETIVO
 Implementar, como una **serie de notebooks** organizada por **CRISP-DM** y con datos en **arquitectura Medallion (Bronze → Silver → Gold)**, la Prueba de Concepto (PoC) para pronosticar el **voltaje de cada celda individual** (181 celdas × 2 electrolizadores, EL A y EL B = 362 celdas) en una **fecha futura** dada, con la arquitectura **BO-VMD + Bi-NOA-LSTM (multi-horizonte directo)** y horizontes de **60 a 180 días**.
@@ -74,6 +76,9 @@ TARGET_CELLS    = None      # None = todas (2 × 181); o lista, p. ej. ["A_c001"
 ANCHOR_DAYS     = 7         # días promediados para el ancla del nivel
 KA_SHUTDOWN     = 10.0      # kA por debajo = día de paro
 MAX_INTERP_DAYS = 3         # huecos ≤ 3 días se interpolan
+OOS_MIN_DAYS    = 7         # duración mínima de un tramo fuera_servicio
+OOS_MERGE_DAYS  = 5         # interrupciones ≤ 5 días no cortan un tramo fuera_servicio
+STEP_THRESHOLD_V = 0.10     # cambio de nivel (V) para registrar un salto
 BO_SAMPLE_CELLS = 20        # celdas para BO-VMD (10 por electrolizador, muestreo estratificado)
 BO_TRIALS       = 30        # evaluaciones de la optimización bayesiana por celda de la muestra
 EVAL_STRIDE     = 7         # días entre orígenes de validación (rolling-origin)
@@ -105,9 +110,10 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - Rango de fechas, frecuencia, hora de registro (la mayoría a las 00:00; ~30 % entre las 07:00 y las 11:00), fechas duplicadas.
 - Faltantes por fecha y por celda (mapa de calor celdas × tiempo).
 - Días de paro (kA bajo) y su efecto sobre los voltajes.
-- Celdas fuera de servicio o puenteadas: V < 0.5 o negativo con kA normal. Casos ya detectados: celdas 61, 62, 123 y 124 de ambos electrolizadores (≈ may-2022 → oct-2024) y la celda 46 del EL B.
+- Celdas fuera de servicio o puenteadas: V < 0.5 o negativo con kA normal. Casos detectados: celdas 61, 62, 123 y 124 de ambos electrolizadores desde 2020-01 hasta ≈ oct-2024 (EL A 123/124 hasta ≈ abr-2025); hasta may-2022 con V < 0.5 y luego mayormente sin dato. Celda 46 del EL B (jul-2021 → ene-2022) y tramos cortos en las celdas 18, 60, 80, 122 y 132 del EL B.
 - Tendencia de envejecimiento (`[Volts]` y voltaje medio de las celdas a lo largo del tiempo), estacionalidad y dispersión entre celdas.
-- Relación `[Volts]` / media de las celdas (≈ 183) y correlación de las celdas con kA.
+- Relación `[Volts]` / media de las celdas en servicio (≈ 180 con 177 celdas, ≈ 186 con 181: `[Volts]` ≈ Σ celdas + 9–15 V) y correlación de las celdas con kA.
+- Saltos de nivel por celda (intervenciones): caídas bruscas de 0.1–0.7 V en lotes de celdas, ~12–14 fechas por electrolizador (cada ~6 meses).
 - Conclusión: lista de reglas de calidad que se aplicarán en Silver.
 
 ### 04 — Preparación Silver (CRISP-DM 3)
@@ -116,14 +122,15 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - Interpolar linealmente los huecos de hasta `MAX_INTERP_DAYS`; los huecos más largos quedan como `NaN`.
 - **Máscara de calidad** por celda y fecha, con códigos: `ok`, `interpolado`, `hueco`, `paro`, `fuera_servicio`, `atipico`.
   - `paro`: `kA < KA_SHUTDOWN`.
-  - `fuera_servicio`: detección automática de tramos con V < 0.5 (incluye negativos) con kA normal, o sin datos durante un período largo.
+  - `fuera_servicio`: detección automática de tramos con V < 0.5 (incluye negativos) con kA normal, o sin datos durante un período largo mientras el resto de las celdas sí tiene dato. Tramos de al menos `OOS_MIN_DAYS` días, uniendo interrupciones de hasta `OOS_MERGE_DAYS` días; los días de paro o sin registro no cortan un tramo.
   - `atipico`: V > 5 V o V < 0 aislados → `NaN`.
 - **Split temporal 80/20** (se decide aquí y se guarda para todas las capas siguientes):
   - Calcular `N_val = round(N * VAL_FRACTION)` e imprimir:
     `"El 20% de validación equivale a X filas diarias, abarcando desde [YYYY-MM-DD] hasta [YYYY-MM-DD]."`
   - Guardar `data/silver/split.json` (fecha de corte).
 - Formato largo recomendado: `fecha, electrolizador, celda, voltaje, kA, V_total, calidad`.
-- Salida: `data/silver/voltajes_silver.parquet`, `data/silver/split.json`, resumen de calidad + metadata.
+- **Saltos de nivel (R9):** tabla de eventos por celda (`fecha, electrolizador, celda, delta_V`), con cambios de más de `STEP_THRESHOLD_V` entre la mediana de los 7 días previos y la de los 7 siguientes, sobre datos `ok`/`interpolado`. **No** se corrigen los valores. Solo se usa para diagnóstico en la evaluación, **nunca como entrada del modelo** (los saltos posteriores al origen son información del futuro).
+- Salida: `data/silver/voltajes_silver.parquet`, `data/silver/split.json`, `data/silver/saltos_nivel.parquet`, resumen de calidad + metadata.
 
 ### 05 — Preparación Gold: BO-VMD y features (CRISP-DM 3)
 **Todo ajuste usa solo train.**
@@ -173,6 +180,7 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - **Baselines:** persistencia (ancla) y tendencia lineal ajustada a la ventana de entrada.
 - Métricas por celda y globales, en V, contra la señal **real sin filtrar** y solo en fechas con calidad `ok`/`interpolado`: `RMSE`, `MAE`, `MAPE`, `R²` (R² por celda, luego promediado).
 - Tabla comparativa a 60 y 180 días: Bi-NOA-LSTM vs. Bi-LSTM estándar vs. baselines.
+- Métricas reportadas también por separado para los pares (celda, origen) cuyo horizonte **cruza o no cruza** un salto de nivel (`saltos_nivel.parquet`).
 - Gráficos:
   - Curva de **error vs. horizonte** (RMSE día 1..180) de modelos y baselines.
   - `Real vs. Predicho` a 60 y 180 días en celdas críticas (mayor voltaje y mayor error).
@@ -194,4 +202,5 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - **Relación entre celdas:** el esquema de canal independiente no la modela explícitamente; se aproxima con covariables comunes del electrolizador (`kA`, `V_total`).
 - **Parámetros de VMD comunes:** asumen un ruido parecido entre celdas; el notebook 05 lo verifica.
 - **Costo de VMD causal en validación:** ~70 orígenes × 362 celdas ≈ 25 000 descomposiciones. Se limita con `EVAL_STRIDE` y `VMD_HISTORY`; conviene paralelizar (`joblib`).
-- **Celdas puenteadas:** en el tramo 2022–2024 hay 4–5 celdas puenteadas por electrolizador; esas muestras se excluyen.
+- **Celdas puenteadas:** entre 2020 y ≈ oct-2024 hay 4–5 celdas puenteadas por electrolizador; esas muestras se excluyen.
+- **Saltos de nivel por intervenciones:** ocurren cada ~6 meses, el mismo orden que el horizonte. Un pronóstico que cruza un salto tiene un error del orden de la caída, y no es predecible sin registro de mantenimientos.
