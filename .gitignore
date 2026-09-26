@@ -19,3 +19,5 @@ desktop.ini
 
 # Figuras generadas (contienen datos de planta)
 reports/**/*.png
+# Detalle de pronósticos con voltajes reales (datos de planta)
+reports/**/detalle_*.csv
