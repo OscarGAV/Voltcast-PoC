@@ -1,0 +1,193 @@
+{
+  "modo": "comun",
+  "params": {
+    "A": {
+      "K": 4,
+      "alpha": 601.3072432190615
+    },
+    "B": {
+      "K": 4,
+      "alpha": 601.3072432190615
+    }
+  },
+  "diferencia_K": 1.0,
+  "cociente_alpha": 1.4173499426891878,
+  "n_drop": 1,
+  "objetivo": "min(entropía de envolvente de los modos)",
+  "K_range": [
+    3,
+    10
+  ],
+  "alpha_range": [
+    500.0,
+    5000.0
+  ],
+  "tau": 0.0,
+  "DC": 0,
+  "init": 1,
+  "tol": 1e-07,
+  "alpha_en_borde_inferior": 0.45,
+  "muestra": [
+    {
+      "celda": "A_c005",
+      "electrolizador": "A",
+      "posicion": 5,
+      "K": 3,
+      "alpha": 506.7043595670106,
+      "entropia": 6.337108346530514
+    },
+    {
+      "celda": "A_c050",
+      "electrolizador": "A",
+      "posicion": 50,
+      "K": 4,
+      "alpha": 1010.3934326359615,
+      "entropia": 6.459575576126248
+    },
+    {
+      "celda": "A_c041",
+      "electrolizador": "A",
+      "posicion": 41,
+      "K": 4,
+      "alpha": 1530.088657082646,
+      "entropia": 6.168556824448781
+    },
+    {
+      "celda": "A_c094",
+      "electrolizador": "A",
+      "posicion": 94,
+      "K": 5,
+      "alpha": 502.8740787049453,
+      "entropia": 6.566240482599277
+    },
+    {
+      "celda": "A_c089",
+      "electrolizador": "A",
+      "posicion": 89,
+      "K": 4,
+      "alpha": 511.67400739590477,
+      "entropia": 6.5895331202983325
+    },
+    {
+      "celda": "A_c116",
+      "electrolizador": "A",
+      "posicion": 116,
+      "K": 10,
+      "alpha": 4268.43566683911,
+      "entropia": 6.174526185969953
+    },
+    {
+      "celda": "A_c133",
+      "electrolizador": "A",
+      "posicion": 133,
+      "K": 3,
+      "alpha": 1313.3644028807832,
+      "entropia": 6.128560434293601
+    },
+    {
+      "celda": "A_c165",
+      "electrolizador": "A",
+      "posicion": 165,
+      "K": 9,
+      "alpha": 898.7870983858304,
+      "entropia": 6.189083311750332
+    },
+    {
+      "celda": "A_c130",
+      "electrolizador": "A",
+      "posicion": 130,
+      "K": 4,
+      "alpha": 596.2170467278708,
+      "entropia": 6.395358424471635
+    },
+    {
+      "celda": "A_c017",
+      "electrolizador": "A",
+      "posicion": 17,
+      "K": 3,
+      "alpha": 606.3974397102522,
+      "entropia": 6.221070310552586
+    },
+    {
+      "celda": "B_c045",
+      "electrolizador": "B",
+      "posicion": 45,
+      "K": 7,
+      "alpha": 537.078868198498,
+      "entropia": 6.618075852025533
+    },
+    {
+      "celda": "B_c058",
+      "electrolizador": "B",
+      "posicion": 58,
+      "K": 3,
+      "alpha": 501.4541205481358,
+      "entropia": 6.256766257516661
+    },
+    {
+      "celda": "B_c029",
+      "electrolizador": "B",
+      "posicion": 29,
+      "K": 3,
+      "alpha": 928.0151665987463,
+      "entropia": 6.286012510487261
+    },
+    {
+      "celda": "B_c098",
+      "electrolizador": "B",
+      "posicion": 98,
+      "K": 3,
+      "alpha": 1471.7779166350274,
+      "entropia": 6.495089315540311
+    },
+    {
+      "celda": "B_c105",
+      "electrolizador": "B",
+      "posicion": 105,
+      "K": 6,
+      "alpha": 502.86572109490515,
+      "entropia": 6.501627647571076
+    },
+    {
+      "celda": "B_c109",
+      "electrolizador": "B",
+      "posicion": 109,
+      "K": 10,
+      "alpha": 814.3533049140545,
+      "entropia": 6.670992677859496
+    },
+    {
+      "celda": "B_c148",
+      "electrolizador": "B",
+      "posicion": 148,
+      "K": 3,
+      "alpha": 524.8921332891399,
+      "entropia": 6.358675704650629
+    },
+    {
+      "celda": "B_c136",
+      "electrolizador": "B",
+      "posicion": 136,
+      "K": 6,
+      "alpha": 502.86572109490515,
+      "entropia": 6.539164069285588
+    },
+    {
+      "celda": "B_c164",
+      "electrolizador": "B",
+      "posicion": 164,
+      "K": 3,
+      "alpha": 1445.2077078806687,
+      "entropia": 6.363718732747069
+    },
+    {
+      "celda": "B_c082",
+      "electrolizador": "B",
+      "posicion": 82,
+      "K": 3,
+      "alpha": 511.6049483432608,
+      "entropia": 6.355488252214457
+    }
+  ],
+  "entrenado_hasta": "2025-04-28"
+}

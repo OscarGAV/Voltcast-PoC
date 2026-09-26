@@ -74,6 +74,9 @@ BO_SAMPLE_CELLS = 20  # celdas para BO-VMD (10 por electrolizador, muestreo estr
 BO_TRIALS = 30  # evaluaciones de la optimización bayesiana por celda de la muestra
 EVAL_STRIDE = 7  # días entre orígenes de validación (rolling-origin)
 VMD_HISTORY = 365  # días de historia usados para VMD causal en validación/inferencia
+VMD_MIN_LEN = 60  # segmento en servicio mínimo (días) para aplicar VMD
+N_JOBS = -1  # procesos de joblib (-1 = todos los núcleos)
+COV_CLIP = 5.0  # |z| máximo de las covariables estandarizadas
 USE_NOA = True  # True = Bi-NOA-LSTM; False = nn.LSTM estándar (ablación)
 SEED = 42
 
