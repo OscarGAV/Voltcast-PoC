@@ -66,6 +66,10 @@ TARGET_CELLS = None  # None = todas (2 × 181); o lista, p. ej. ["A_c001", "B_c0
 ANCHOR_DAYS = 7  # días promediados para el ancla del nivel
 KA_SHUTDOWN = 10.0  # kA por debajo = día de paro
 MAX_INTERP_DAYS = 3  # huecos ≤ 3 días se interpolan
+OOS_MIN_DAYS = 7  # duración mínima de un tramo fuera_servicio
+OOS_MERGE_DAYS = 5  # interrupciones ≤ 5 días no cortan un tramo fuera_servicio
+STEP_THRESHOLD_V = 0.10  # cambio de nivel (V) para registrar un salto
+STEP_WINDOW_DAYS = 7  # días de mediana antes/después para detectar un salto
 BO_SAMPLE_CELLS = 20  # celdas para BO-VMD (10 por electrolizador, muestreo estratificado)
 BO_TRIALS = 30  # evaluaciones de la optimización bayesiana por celda de la muestra
 EVAL_STRIDE = 7  # días entre orígenes de validación (rolling-origin)

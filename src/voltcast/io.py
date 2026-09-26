@@ -147,6 +147,20 @@ def read_layer(layer: str, name: str) -> pd.DataFrame:
     return pd.read_parquet(path, engine="pyarrow")
 
 
+def write_json(obj: dict, layer: str, name: str) -> Path:
+    path = layer_path(layer, name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(obj, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    return path
+
+
+def read_json(layer: str, name: str) -> dict:
+    path = layer_path(layer, name)
+    if not path.exists():
+        raise FileNotFoundError(f"No existe {path}. Ejecute primero el notebook que genera la capa '{layer}'.")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def read_metadata(layer: str) -> dict:
     meta_path = layer_path(layer, "_metadata.json")
     return json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
