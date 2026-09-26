@@ -1,6 +1,8 @@
-# SYSTEM PROMPT: PoC MODELO PREDICTIVO VOLTCAST (JUPYTER / COLAB) — v3.1
+# SYSTEM PROMPT: PoC MODELO PREDICTIVO VOLTCAST (JUPYTER / COLAB) — v3.2
 
 > **Cambios v3.1** (tras el EDA del notebook 03): casos de celdas puenteadas corregidos, relación `[Volts]` / media corregida, nueva tabla de **saltos de nivel** en Silver (R9) y métricas separadas por orígenes que cruzan un salto en la evaluación.
+>
+> **Cambios v3.2** (notebooks 05–06): covariables estandarizadas sin días de paro y acotadas a ±`COV_CLIP`; en el entrenamiento se enmascaran los objetivos posteriores a un salto de nivel (`MASK_POST_JUMP`, saltos detectados solo con train), porque sin esa máscara la red sobreajusta a los saltos de train; tras el early stopping se reentrena con todo train (`REFIT_FULL_TRAIN`).
 
 ## OBJETIVO
 Implementar, como una **serie de notebooks** organizada por **CRISP-DM** y con datos en **arquitectura Medallion (Bronze → Silver → Gold)**, la Prueba de Concepto (PoC) para pronosticar el **voltaje de cada celda individual** (181 celdas × 2 electrolizadores, EL A y EL B = 362 celdas) en una **fecha futura** dada, con la arquitectura **BO-VMD + Bi-NOA-LSTM (multi-horizonte directo)** y horizontes de **60 a 180 días**.
@@ -84,6 +86,10 @@ BO_TRIALS       = 30        # evaluaciones de la optimización bayesiana por cel
 EVAL_STRIDE     = 7         # días entre orígenes de validación (rolling-origin)
 VMD_HISTORY     = 365       # días de historia usados para VMD causal en validación/inferencia
 USE_NOA         = True      # True = Bi-NOA-LSTM; False = nn.LSTM estándar (ablación)
+MASK_POST_JUMP  = True      # enmascarar en el loss los objetivos posteriores a un salto de nivel (histórico de train)
+ES_BLOCK_DAYS   = 270       # último bloque de train para early stopping
+REFIT_FULL_TRAIN = True     # reentrenar con todo train durante las épocas elegidas
+COV_CLIP        = 5.0       # |z| máximo de las covariables
 SEED            = 42
 ```
 
@@ -162,6 +168,7 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - Identidad de la celda: `nn.Embedding(n_celdas, 8)` + indicador de electrolizador.
 - **Salida:** `[B, 180]` (horizonte completo en un solo pase).
 - Se excluyen las muestras cuya ventana de entrada cae en un tramo `fuera_servicio`; los objetivos enmascarados se excluyen del loss (**MSE enmascarado**).
+- Con `MASK_POST_JUMP`, también se enmascaran los objetivos a partir del próximo salto de nivel de la celda (saltos detectados con la regla R9 **solo sobre train**). El modelo aprende la trayectoria sin intervenciones; la evaluación usa todos los objetivos válidos.
 
 **Celda Bi-NOA-LSTM (propia):**
 - LSTM estándar, salvo la salida del estado oculto: `h_t = o_t ⊙ c_t` (sin `tanh`).
@@ -170,7 +177,7 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 
 **Cabezal y entrenamiento:**
 - Cabezal: `concat(h_final, embedding_celda, flag_EL) → Linear → Linear(→ 180)`, sin activación de salida.
-- Entrenamiento: AdamW, *early stopping* sobre el último bloque de train (**no** sobre validación), GPU si está disponible, orígenes submuestreados (stride 3–7 días) para acortar las épocas.
+- Entrenamiento: AdamW, *early stopping* sobre el último bloque de train (**no** sobre validación), GPU si está disponible, orígenes submuestreados (stride 3–7 días, fase aleatoria por época) para acortar las épocas. En el bloque de early stopping, los objetivos del train interno se cortan antes del bloque. Con la época elegida se reentrena con todo train (`REFIT_FULL_TRAIN`).
 - **Ablación:** entrenar también con `USE_NOA=False` (`nn.LSTM(bidirectional=True)`).
 - Salida: `models/bi_noa_lstm.pt`, `models/bi_lstm_baseline.pt` (pesos, config, escaladores, versión) y curvas de entrenamiento en `reports/`.
 
