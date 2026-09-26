@@ -16,3 +16,6 @@ models/*.pt
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Figuras generadas (contienen datos de planta)
+reports/**/*.png
