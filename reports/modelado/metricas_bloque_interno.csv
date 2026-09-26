@@ -1,4 +1,4 @@
-modelo,RMSE h1 (mV),RMSE h30 (mV),RMSE h60 (mV),RMSE h180 (mV),RMSE medio 1–180 (mV),mejor época,tiempo (s)
-Bi-NOA-LSTM,4.5,9.8,21.4,29.7,17.8,20.0,293.0
-Bi-LSTM estándar,3.1,9.8,21.6,29.4,17.3,36.0,65.0
-persistencia (ancla),4.3,10.6,22.3,34.8,20.9,,
+modelo,RMSE h1 (V),RMSE h30 (V),RMSE h60 (V),RMSE h180 (V),RMSE medio 1–180 (V),mejor época,tiempo (s)
+Bi-NOA-LSTM,0.0045,0.0098,0.0214,0.0297,0.0178,20.0,283.0
+Bi-LSTM estándar,0.0031,0.0098,0.0216,0.0294,0.0173,36.0,61.0
+persistencia (ancla),0.0043,0.0106,0.0223,0.0348,0.0209,,
