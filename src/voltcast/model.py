@@ -108,6 +108,63 @@ class VoltCastNet(nn.Module):
         return self.head(z)
 
 
+class Seq2SeqAttention(nn.Module):
+    """Propuesta B: encoder BiLSTM + decoder LSTM con atención multi-cabeza, **autorregresivo paso a paso**.
+
+    El decoder genera ``ŷ_{t0+1} … ŷ_{t0+H}`` realimentando su propia predicción (sin teacher forcing), así que
+    el error puede acumularse con el horizonte (deriva por recursión), a diferencia de ``VoltCastNet``.
+    """
+
+    def __init__(self, n_cells: int, n_features: int, hidden: int = 64, dec_hidden: int = 128, heads: int = 4,
+                 emb_dim: int = 8, dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
+        super().__init__()
+        d = 2 * hidden
+        self.horizon = horizon
+        self.encoder = nn.LSTM(n_features, hidden, batch_first=True, bidirectional=True)
+        self.emb = nn.Embedding(n_cells, emb_dim)
+        self.init_h = nn.Linear(d + emb_dim + 1, dec_hidden)
+        self.init_c = nn.Linear(d + emb_dim + 1, dec_hidden)
+        self.heads, self.dh = heads, d // heads
+        # Atención multi-cabeza: claves y valores del encoder se proyectan una sola vez (no en cada paso)
+        self.q = nn.Linear(dec_hidden, d)
+        self.k = nn.Linear(d, d)
+        self.v = nn.Linear(d, d)
+        self.o = nn.Linear(d, d)
+        self.decoder = nn.LSTMCell(1 + d, dec_hidden)
+        self.drop = nn.Dropout(dropout)
+        self.out = nn.Sequential(nn.Linear(dec_hidden + d, dec_hidden), nn.GELU(), nn.Linear(dec_hidden, 1))
+
+    def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor) -> Tensor:
+        enc, (h_n, _) = self.encoder(x)  # [B, L, d]
+        z = self.drop(torch.cat([h_n[-2], h_n[-1], self.emb(cell), el_flag.unsqueeze(-1)], dim=-1))
+        h, c = torch.tanh(self.init_h(z)), self.init_c(z)
+        B, L, d = enc.shape
+        K = self.k(enc).view(B, L, self.heads, self.dh).transpose(1, 2)  # [B, heads, L, dh]
+        V = self.v(enc).view(B, L, self.heads, self.dh).transpose(1, 2)
+        escala = self.dh ** -0.5
+        y = x[:, -1, :1]  # último voltaje relativo al ancla
+        outs = []
+        for _ in range(self.horizon):
+            q = self.q(h).view(B, self.heads, 1, self.dh)
+            w = torch.softmax(q @ K.transpose(-1, -2) * escala, dim=-1)  # [B, heads, 1, L]
+            ctx = self.o((w @ V).reshape(B, d))
+            h, c = self.decoder(torch.cat([y, ctx], dim=-1), (h, c))
+            y = self.out(self.drop(torch.cat([h, ctx], dim=-1)))
+            outs.append(y)
+        return torch.cat(outs, dim=1)
+
+
+class Ensemble(nn.Module):
+    """Promedio de las salidas de varios modelos con la misma interfaz ``(x, cell, el_flag) → [B, H]``."""
+
+    def __init__(self, models: list[nn.Module]):
+        super().__init__()
+        self.models = nn.ModuleList(models)
+
+    def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor) -> Tensor:
+        return torch.stack([m(x, cell, el_flag) for m in self.models]).mean(0)
+
+
 def count_params(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -207,21 +264,25 @@ def fit(model, data, train_range: tuple[int, int], train_target_limit: int, cfg:
 # Persistencia del modelo
 # --------------------------------------------------------------------------- #
 MODEL_KWARGS = ["hidden", "layers", "emb_dim", "head_hidden", "dropout"]
+SEQ2SEQ_KWARGS = ["hidden", "dec_hidden", "heads", "emb_dim", "dropout"]
 VERSION = "voltcast-poc-0.1"
 
 
-def build_model(n_cells: int, n_features: int, cfg: dict, use_noa: bool) -> VoltCastNet:
+def build_model(n_cells: int, n_features: int, cfg: dict, use_noa: bool = True) -> nn.Module:
+    """``cfg['arch'] == 'seq2seq'`` → ``Seq2SeqAttention``; si no, ``VoltCastNet`` (Bi-NOA-LSTM o Bi-LSTM)."""
+    if cfg.get("arch") == "seq2seq":
+        return Seq2SeqAttention(n_cells, n_features, **{k: cfg[k] for k in SEQ2SEQ_KWARGS})
     return VoltCastNet(n_cells, n_features, **{k: cfg[k] for k in MODEL_KWARGS}, use_noa=use_noa)
 
 
-def save_checkpoint(path, model: VoltCastNet, meta: dict) -> None:
+def save_checkpoint(path, model: nn.Module, meta: dict) -> None:
     """Guarda pesos + todo lo necesario para reconstruir e interpretar el modelo (config, escaladores, celdas…)."""
     torch.save({"state_dict": model.state_dict(), "version": VERSION, "torch": torch.__version__, **meta}, path)
 
 
-def load_checkpoint(path, device="cpu") -> tuple[VoltCastNet, dict]:
+def load_checkpoint(path, device="cpu") -> tuple[nn.Module, dict]:
     ck = torch.load(path, map_location=device, weights_only=False)
-    model = build_model(len(ck["cells"]), len(ck["features"]), ck["train_cfg"], ck["use_noa"])
+    model = build_model(len(ck["cells"]), len(ck["features"]), ck["train_cfg"], ck.get("use_noa", True))
     model.load_state_dict(ck["state_dict"])
     return model.to(device).eval(), ck
 
@@ -230,7 +291,7 @@ def load_checkpoint(path, device="cpu") -> tuple[VoltCastNet, dict]:
 # Inferencia
 # --------------------------------------------------------------------------- #
 @torch.no_grad()
-def predict_volts(model: VoltCastNet, vf_win, valid_win, ka_win, vc_win, sigma: float, cell_idx, el_flag,
+def predict_volts(model: nn.Module, vf_win, valid_win, ka_win, vc_win, sigma: float, cell_idx, el_flag,
                   device="cpu"):
     """Pronóstico en voltios para N celdas de un origen en un único forward pass.
 
