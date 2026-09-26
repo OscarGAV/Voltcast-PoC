@@ -78,6 +78,14 @@ VMD_MIN_LEN = 60  # segmento en servicio mínimo (días) para aplicar VMD
 N_JOBS = -1  # procesos de joblib (-1 = todos los núcleos)
 COV_CLIP = 5.0  # |z| máximo de las covariables estandarizadas
 USE_NOA = True  # True = Bi-NOA-LSTM; False = nn.LSTM estándar (ablación)
+MASK_POST_JUMP = True  # enmascarar en el loss los objetivos posteriores a un salto de nivel (histórico de train)
+ES_BLOCK_DAYS = 270  # último bloque de train usado para early stopping
+REFIT_FULL_TRAIN = True  # tras el early stopping, reentrenar con todo train durante las épocas elegidas
+TRAIN = {
+    "hidden": 64, "layers": 1, "emb_dim": 8, "head_hidden": 256, "dropout": 0.2,
+    "batch_size": 1024, "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0,
+    "max_epochs": 80, "patience": 10, "stride": 5,  # orígenes de train cada 5 días (fase aleatoria por época)
+}
 SEED = 42
 
 # Umbrales de calidad usados en EDA y Silver
