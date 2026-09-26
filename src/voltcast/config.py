@@ -88,6 +88,14 @@ TRAIN = {
 }
 SEED = 42
 
+# Propuesta B: Seq2Seq BiLSTM + atención multi-cabeza + filtro de Kalman (ensamble de semillas)
+SEQ2SEQ = {
+    "arch": "seq2seq", "hidden": 64, "dec_hidden": 128, "heads": 4, "emb_dim": 8, "dropout": 0.2,
+    "batch_size": 512, "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0,  # lote limitado por la memoria de la GPU (8 GB)
+    "max_epochs": 40, "patience": 6, "stride": 10,  # decoder de 180 pasos: épocas más caras → orígenes cada 10 días
+}
+ENSEMBLE_SEEDS = [42, 43, 44]
+
 # Umbrales de calidad usados en EDA y Silver
 V_OUT_OF_SERVICE = 0.5  # V por debajo (o negativo) con kA normal = celda fuera de servicio / puenteada
 V_MAX_PLAUSIBLE = 5.0  # V por encima = atípico

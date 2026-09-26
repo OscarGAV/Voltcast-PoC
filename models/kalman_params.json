@@ -1,0 +1,65 @@
+{
+  "q_nivel": 5.3643368103069837e-05,
+  "q_pend": 9.357622968840175e-14,
+  "r": 2.289362173647788e-05,
+  "modelo": "nivel y tendencia local",
+  "estimacion": "MV conjunta sobre la muestra BO (train)",
+  "reinicios_en_estimacion": "saltos de nivel (train) y primer día tras paro",
+  "ajustes": {
+    "A": {
+      "q_nivel": 4.935797827007054e-05,
+      "q_pend": 3.859979619514232e-09,
+      "r": 3.1175872777039956e-05,
+      "loglik": 51752.90231304325,
+      "iteraciones": 73.0,
+      "convergio": 1.0
+    },
+    "B": {
+      "q_nivel": 5.8328753828492834e-05,
+      "q_pend": 9.357622968840175e-14,
+      "r": 1.4131608360607009e-05,
+      "loglik": 51962.83776766421,
+      "iteraciones": 114.0,
+      "convergio": 1.0
+    },
+    "común": {
+      "q_nivel": 5.3643368103069837e-05,
+      "q_pend": 9.357622968840175e-14,
+      "r": 2.289362173647788e-05,
+      "loglik": 103576.36501965644,
+      "iteraciones": 115.0,
+      "convergio": 1.0
+    },
+    "común (sin reinicios)": {
+      "q_nivel": 0.0001567897220456208,
+      "q_pend": 9.357622968840175e-14,
+      "r": 9.357622968840175e-14,
+      "loglik": 109986.3503459249,
+      "iteraciones": 123.0,
+      "convergio": 1.0
+    }
+  },
+  "muestra": [
+    "A_c005",
+    "A_c050",
+    "A_c041",
+    "A_c094",
+    "A_c089",
+    "A_c116",
+    "A_c133",
+    "A_c165",
+    "A_c130",
+    "A_c017",
+    "B_c045",
+    "B_c058",
+    "B_c029",
+    "B_c098",
+    "B_c105",
+    "B_c109",
+    "B_c148",
+    "B_c136",
+    "B_c164",
+    "B_c082"
+  ],
+  "entrenado_hasta": "2025-04-28"
+}
