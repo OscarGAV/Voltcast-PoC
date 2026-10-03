@@ -256,6 +256,10 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 
 ---
 
+## PENDIENTES DE REVISIÓN
+- **Split 90/10:** evaluar `VAL_FRACTION = 0.10` (train hasta 2025-12-25, validación de 243 días). Se mantiene 80/20 porque con 90/10 la validación baja a ~35 orígenes y ~10 con horizonte completo de 180 días (menos evidencia estadística), dominada por la intervención de jul-2026. Si se aprueba, repetir todo desde el notebook 04, incluido SOMA (~4 h).
+- **Despliegue:** usar el modelo evaluado (entrenado con el 80 %); el reentrenamiento con todos los datos queda para el plan de reentrenamiento del notebook 08.
+
 ## RIESGOS CONOCIDOS
 - **Datos de entrenamiento:** ~1935 días de train y ~484 de validación, con ~305 orígenes posibles para H=180, muy solapados. Hay pocas trayectorias independientes de 180 días.
 - **Relación entre celdas:** el esquema de canal independiente no la modela explícitamente; se aproxima con covariables comunes del electrolizador (`kA`, `V_total`).

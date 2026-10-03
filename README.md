@@ -108,3 +108,11 @@ Poc-TP1/
 
 - Notebook 08 (despliegue): función `predecir(fecha, celda)`, exportación de pronósticos y plan de monitoreo y reentrenamiento.
 - Entrenamiento con varias semillas para confirmar las diferencias pequeñas entre modelos.
+
+### Pendiente de revisión: split 90/10
+
+Se evaluó pasar de 80/20 a **90/10** (train hasta 2025-12-25, validación de 243 días). Se mantiene **80/20** por ahora y queda como acción pendiente de revisión:
+
+- **A favor:** el modelo aprende de 8 meses más de datos, los más recientes.
+- **En contra:** la validación baja de 70 a ~35 fechas de origen y de 44 a ~10 con el horizonte completo de 180 días (todas entre dic-2025 y feb-2026), por lo que la evidencia a 180 días pierde solidez; además, queda dominada por la intervención de jul-2026 en el EL A.
+- **Si se aprueba:** cambiar `VAL_FRACTION = 0.10` en [`config.py`](src/voltcast/config.py) y **repetir todo desde el notebook 04** (split, BO-VMD, Kalman y los 9 modelos, incluido SOMA de la Propuesta A): ~4 h de cómputo en una RTX 4060.
