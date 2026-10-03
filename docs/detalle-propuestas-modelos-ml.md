@@ -4,6 +4,21 @@
 
 El presente documento detalla la formulación matemática, la arquitectura algorítmica, los mecanismos de filtrado de señal, las técnicas de optimización y el procedimiento de aplicación práctica de las cinco (5) propuestas de modelos predictivos evaluadas en el Benchmarking.
 
+### Propósito de la PoC
+La Prueba de Concepto implementa y **compara los 4 modelos mejor puntuados en el Benchmarking**, junto con **2 modelos de referencia (Persistencia y Tendencia Lineal)**, con los datos reales de la planta. Todos se evalúan bajo las mismas condiciones (mismo dataset, misma división 80/20, mismas ventanas $L$ y $H$) con las métricas **MAE, RMSE, MSE, MAPE y $R^2$**. Su objetivo es validar empíricamente el ranking del Benchmarking, que se basó en la literatura, y comprobar que los modelos de Deep Learning superan a métodos simples.
+
+| Puesto | Propuesta | Modelo | Puntaje Benchmarking | ¿Se incluye en la PoC? |
+| :--- | :--- | :--- | :--- | :--- |
+| 1° | A | BO-VMD + SOMA-Bi-NOA-LSTM (MIMO) | 5.00 | Sí |
+| 2° | C | ST-GRU (Spatial-Temporal GRU) | 4.00 | Sí |
+| 3° | D | TCN Multi-Output | 3.90 | Sí |
+| 4° | B | Seq2Seq BiLSTM con Atención + Filtro de Kalman | 3.80 | Sí |
+| 5° | E | Informer / PatchTST | 2.30 | No (se describe solo como referencia) |
+
+**Modelos de referencia (*baselines*):** no forman parte del Benchmarking; sirven como punto de comparación mínimo.
+- **Persistencia:** repite el último voltaje observado de cada celda para todo el horizonte ($\hat{y}_{t+h} = y_t$).
+- **Tendencia Lineal:** ajusta por celda una recta $y = a + b\,t$ sobre la ventana histórica de $L = 720$ horas y la extrapola a las $H$ horas futuras.
+
 ### Estructura del Dataset de Entrada
 El conjunto de datos de la planta química se organiza como una matriz temporal donde:
 *   **Filas (Dimensión Temporal $T$):** Registros horativos continuos ($t_1, t_2, \dots, t_N$).
@@ -85,7 +100,7 @@ El conjunto de datos de la planta química se organiza como una matriz temporal 
 
 ---
 
-### PROPUESTA E: Informer / PatchTST (Transformers de Largo Alcance)
+### PROPUESTA E: Informer / PatchTST (Transformers de Largo Alcance) — *No incluida en la PoC*
 *Referencias Principales: Guan Min (2026); Zhang et al. (2026); Long-term sequence forecasting in industrial grids using PatchTST.pdf*
 
 #### 1. Arquitectura y Componentes Algorítmicos
@@ -113,6 +128,9 @@ El conjunto de datos de la planta química se organiza como una matriz temporal 
 | **Generación Futura ($H$)** | Single Forward Pass (1 solo cálculo) | Iterativo Paso a Paso ($t+1 \dots t+H$) | Proyección Progresiva Espaciotemporal | Capa Densa Paralela | Decodificador Generativo por Parches |
 | **Riesgo de Acumulación de Error** | **Nulo (0%)** | Alto (*Error Drift*) | Moderado | Nulo (0%) | Bajo |
 | **Latencia de Inferencia** | **8 – 12 ms** | 50 – 150 ms | 15 – 30 ms | < 8 ms | > 200 ms |
+| **¿Se incluye en la PoC?** | Sí | Sí | Sí | Sí | No |
+
+> Los valores de riesgo de acumulación de error y latencia de esta tabla son estimaciones tomadas de la literatura. La PoC debe medirlos con los datos reales y reportar los valores obtenidos, aunque difieran de esta tabla.
 
 
 ## 4. CONSIDERACIONES
