@@ -1,0 +1,5 @@
+horizonte,modelo propio,mejor del Benchmarking,ΔRMSE (V),IC95 inf,IC95 sup,conclusión
+60,Propio · Bi-NOA-LSTM,B · Seq2Seq-Att + Kalman (Bench. 4.º),-0.0034425677575276106,-0.012709976445929631,0.002798658227307255,sin diferencia significativa
+60,Propio · Bi-LSTM,B · Seq2Seq-Att + Kalman (Bench. 4.º),-0.005518019238988522,-0.0156343655842331,0.004886850800982304,sin diferencia significativa
+180,Propio · Bi-NOA-LSTM,C · ST-GRU (Bench. 2.º),-0.02882920172499369,-0.03644831410506649,-0.02178302335603944,propio mejor (significativo)
+180,Propio · Bi-LSTM,C · ST-GRU (Bench. 2.º),-0.02864173926024742,-0.03628477153374308,-0.021358051983961165,propio mejor (significativo)
