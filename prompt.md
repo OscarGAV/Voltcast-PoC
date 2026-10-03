@@ -236,7 +236,7 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - **Rolling-origin** sobre validación (orígenes cada `EVAL_STRIDE` días; el contexto de entrada puede venir de train).
 - Inferencia: las 362 celdas como un batch → matriz `[180, 362]` en un único forward pass por origen. Reconstrucción `V̂ = ancla + σ_Δ · ŷ`.
 - **Baselines:** persistencia (`ŷ = y(t0)`, último voltaje real observado) y tendencia lineal ajustada a los 30 días de la serie real sin filtrar.
-- Métricas por celda y globales, en V, contra la señal **real sin filtrar** y solo en fechas con calidad `ok`/`interpolado`: `MAE`, `MSE`, `RMSE`, `MAPE`, `R²` (global y por celda).
+- Métricas por celda y globales, en V, contra la señal **real sin filtrar** y solo en fechas con calidad `ok`/`interpolado`: `MAE`, `MSE`, `RMSE`, `MAPE`, `R²` (global, por celda y **sobre el cambio de voltaje** respecto del valor real en `t0`, que mide qué parte de la evolución anticipa el modelo sin el efecto del nivel de cada celda).
 - Tabla comparativa de los 9 modelos (global 1–180, 60 y 180 días) → `reports/metricas_comparativas.csv`, con el mejor modelo por métrica, % de mejora frente a los baselines, tiempos de entrenamiento e inferencia y ranking empírico vs. Benchmarking.
 - Métricas reportadas también por separado para los pares (celda, origen) cuyo horizonte **cruza o no cruza** un salto de nivel (`saltos_nivel.parquet`).
 - Gráficos:
@@ -247,6 +247,7 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - Salida: `reports/metricas.csv`, figuras.
 
 ### 08 — Despliegue (CRISP-DM 6)
+- **Modelo elegido:** Bi-LSTM propia (`models/bi_lstm_baseline.pt`), mejor en todas las métricas sobre el horizonte completo en el notebook 07.
 - Cargar el modelo elegido y los escaladores; pronosticar desde la última fecha disponible (VMD causal sobre los últimos `VMD_HISTORY` días).
 - Función `predecir(fecha, celda)`, p. ej. `predecir("2026-12-01", "B_c017")`, que devuelve el voltaje en V.
   - Valida que `1 ≤ (fecha − origen) ≤ HORIZON_DAYS`, que la celda exista y que no esté fuera de servicio; si no, error descriptivo.
