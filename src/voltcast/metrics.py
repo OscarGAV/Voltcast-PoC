@@ -13,19 +13,34 @@ from . import config
 # --------------------------------------------------------------------------- #
 # Baselines
 # --------------------------------------------------------------------------- #
-def persistence(anchor: np.ndarray, horizon: int = config.HORIZON_DAYS) -> np.ndarray:
-    """Persistencia: el nivel del ancla se mantiene en todo el horizonte. ``[...] → [..., H]``."""
-    return np.repeat(anchor[..., None], horizon, axis=-1)
+def persistence(last: np.ndarray, horizon: int = config.HORIZON_DAYS) -> np.ndarray:
+    """Persistencia: repite un valor (``last [...]``) en todo el horizonte → ``[..., H]``."""
+    return np.repeat(last[..., None], horizon, axis=-1)
+
+
+def last_observed(window: np.ndarray) -> np.ndarray:
+    """Último valor no NaN de cada ventana ``[..., L]`` (el voltaje real de t0, o el más reciente disponible)."""
+    ok = np.isfinite(window)
+    idx = np.where(ok.any(-1), window.shape[-1] - 1 - np.argmax(ok[..., ::-1], axis=-1), 0)
+    out = np.take_along_axis(window, idx[..., None], axis=-1)[..., 0]
+    return np.where(ok.any(-1), out, np.nan)
 
 
 def linear_trend(window: np.ndarray, horizon: int = config.HORIZON_DAYS) -> np.ndarray:
-    """Tendencia lineal por mínimos cuadrados sobre la ventana de entrada ``[..., L]``, extrapolada ``H`` días."""
+    """Recta ``y = a + b·t`` por mínimos cuadrados sobre los valores no NaN de la ventana ``[..., L]``,
+    extrapolada ``H`` días (t0 = 0). Con menos de 2 puntos devuelve NaN."""
     L = window.shape[-1]
-    t = np.arange(L) - (L - 1)  # t0 = 0
-    tc = t - t.mean()
-    y = window
-    b = (tc * (y - y.mean(axis=-1, keepdims=True))).sum(-1) / (tc ** 2).sum()
-    a = y.mean(-1) - b * t.mean()  # valor de la recta en t0
+    t = np.broadcast_to(np.arange(L) - (L - 1), window.shape).astype(float)
+    ok = np.isfinite(window)
+    n = ok.sum(-1)
+    tm = np.where(ok, t, 0).sum(-1) / np.maximum(n, 1)
+    ym = np.where(ok, window, 0).sum(-1) / np.maximum(n, 1)
+    dt = np.where(ok, t - tm[..., None], 0)
+    dy = np.where(ok, window - ym[..., None], 0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        b = (dt * dy).sum(-1) / (dt ** 2).sum(-1)
+    a = ym - b * tm
+    a = np.where(n >= 2, a, np.nan)
     h = np.arange(1, horizon + 1)
     return a[..., None] + b[..., None] * h
 
@@ -39,6 +54,16 @@ def _masked(x, mask):
 
 def rmse(pred, real, mask, axis=None):
     return np.sqrt(np.nanmean(_masked((pred - real) ** 2, mask), axis=axis))
+
+
+def mse(pred, real, mask, axis=None):
+    return np.nanmean(_masked((pred - real) ** 2, mask), axis=axis)
+
+
+def r2_global(pred, real, mask) -> float:
+    """R² sobre todos los objetivos evaluables juntos: 1 − Σ(y − ŷ)² / Σ(y − ȳ)²."""
+    p, r = pred[mask], real[mask]
+    return float(1 - ((r - p) ** 2).sum() / ((r - r.mean()) ** 2).sum())
 
 
 def mae(pred, real, mask, axis=None):
@@ -62,17 +87,26 @@ def r2_per_cell(pred, real, mask):
         return np.where((n >= 3) & (sst > 0), 1 - sse / sst, np.nan)
 
 
-def summary_at(preds: dict, real, mask, h: int) -> pd.DataFrame:
-    """Tabla de métricas a horizonte ``h`` (1-indexado) para cada modelo, en V (RMSE/MAE) y % (MAPE)."""
-    k = h - 1
+def summary_at(preds: dict, real, mask, h: int | None) -> pd.DataFrame:
+    """Métricas para cada modelo a horizonte ``h`` (1-indexado) o, con ``h=None``, sobre los horizontes 1–H juntos.
+
+    MAE, RMSE en V; MSE en V²; MAPE en %; R² global (todos los objetivos) y R² por celda (media y mediana).
+    """
     filas = []
     for nombre, p in preds.items():
-        pk, rk, mk = p[..., k], real[..., k], mask[..., k]
-        r2 = r2_per_cell(pk, rk, mk)
+        if h is None:
+            pk, rk, mk = p, real, mask
+            r2c = np.nanmean(np.stack([r2_per_cell(p[..., k], real[..., k], mask[..., k])
+                                       for k in range(p.shape[-1])]), axis=0)
+        else:
+            k = h - 1
+            pk, rk, mk = p[..., k], real[..., k], mask[..., k]
+            r2c = r2_per_cell(pk, rk, mk)
         filas.append({
-            "modelo": nombre, "horizonte": h, "n": int(mk.sum()),
-            "RMSE_V": float(rmse(pk, rk, mk)), "MAE_V": float(mae(pk, rk, mk)), "MAPE_%": float(mape(pk, rk, mk)),
-            "R2_medio": float(np.nanmean(r2)), "R2_mediana": float(np.nanmedian(r2)),
+            "modelo": nombre, "horizonte": "1–180" if h is None else h, "n": int(mk.sum()),
+            "MAE_V": float(mae(pk, rk, mk)), "MSE_V2": float(mse(pk, rk, mk)), "RMSE_V": float(rmse(pk, rk, mk)),
+            "MAPE_%": float(mape(pk, rk, mk)), "R2_global": r2_global(pk, rk, mk),
+            "R2_medio": float(np.nanmean(r2c)), "R2_mediana": float(np.nanmedian(r2c)),
         })
     return pd.DataFrame(filas)
 

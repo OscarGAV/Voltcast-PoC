@@ -62,7 +62,10 @@ LOOKBACK_DAYS = 30  # L
 HORIZON_DAYS = 180  # H máx.; se evalúan cortes a 60 y 180
 EVAL_HORIZONS = [60, 180]
 VAL_FRACTION = 0.20
-TARGET_CELLS = None  # None = todas (2 × 181); o lista, p. ej. ["A_c001", "B_c017"]
+TARGET_CELLS = None  # None = todas las celdas detectadas en el Excel; o lista, p. ej. ["A_c001", "B_c017"]
+# Celdas físicas por electrolizador. [Volts] suma todas las celdas físicas aunque el Excel incluya menos;
+# se usa para que la covariable V_total / celdas en servicio no se distorsione. None = usar las del Excel.
+N_CELDAS_FISICAS = 181
 ANCHOR_DAYS = 7  # días promediados para el ancla del nivel
 KA_SHUTDOWN = 10.0  # kA por debajo = día de paro
 MAX_INTERP_DAYS = 3  # huecos ≤ 3 días se interpolan
@@ -95,6 +98,20 @@ SEQ2SEQ = {
     "max_epochs": 40, "patience": 6, "stride": 10,  # decoder de 180 pasos: épocas más caras → orígenes cada 10 días
 }
 ENSEMBLE_SEEDS = [42, 43, 44]
+FUSION_ALPHAS = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]  # ensamble red + Kalman (Khan et al., 2026)
+
+# Propuesta A tal cual el Benchmarking: MIMO + SOMA + RFR-SHAP + Min-Max
+MIMO_TRAIN = {"arch": "mimo", "dropout": 0.2, "weight_decay": 1e-4, "clip": 1.0, "batch_size": 32, "stride": 1,
+              "max_epochs": 80, "patience": 10}
+SOMA = {"pop": 5, "migrations": 3, "path_length": 2.0, "step": 0.4, "prt": 0.3, "max_epochs": 20, "patience": 4}
+SOMA_SPACE = {"lr": (1e-4, 1e-2), "layers": (1, 3), "hidden": (32, 256)}
+SHAP_UMBRAL_PCT = 5.0  # % mínimo de importancia SHAP para incluir una covariable
+
+# Propuestas C (ST-GRU) y D (TCN)
+STGRU = {"arch": "stgru", "gcn_dim": 32, "hidden": 64, "dropout": 0.2, "vecinas": 1, "k_correlacion": 4,
+         "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0, "batch_size": 16, "stride": 1, "max_epochs": 80, "patience": 10}
+TCN = {"arch": "tcn", "channels": 64, "dropout": 0.2, "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0,
+       "batch_size": 32, "stride": 1, "max_epochs": 80, "patience": 10}
 
 # Umbrales de calidad usados en EDA y Silver
 V_OUT_OF_SERVICE = 0.5  # V por debajo (o negativo) con kA normal = celda fuera de servicio / puenteada

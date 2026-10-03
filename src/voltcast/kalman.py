@@ -14,11 +14,11 @@ BURN_IN = 10  # observaciones iniciales de cada segmento excluidas de la verosim
 
 
 def kalman_filter(y: np.ndarray, blocked: np.ndarray, q_nivel: float, q_pend: float, r: float,
-                  return_loglik: bool = False):
+                  return_loglik: bool = False, return_slope: bool = False):
     """Filtra ``y [T, C]`` (NaN = sin observación). ``blocked [T, C]`` corta la serie y reinicia el filtro.
 
-    Devuelve el nivel filtrado ``[T, C]`` (NaN en días bloqueados o antes de la primera observación del segmento)
-    y, opcionalmente, la log-verosimilitud total.
+    Devuelve el nivel filtrado ``[T, C]`` (NaN en días bloqueados o antes de la primera observación del segmento);
+    con ``return_slope`` también la pendiente filtrada, y con ``return_loglik`` la log-verosimilitud total.
     """
     T, C = y.shape
     lvl = np.full(C, np.nan)
@@ -26,6 +26,7 @@ def kalman_filter(y: np.ndarray, blocked: np.ndarray, q_nivel: float, q_pend: fl
     P11, P12, P22 = np.zeros(C), np.zeros(C), np.zeros(C)
     n_obs = np.zeros(C, dtype=int)
     out = np.full((T, C), np.nan)
+    out_s = np.full((T, C), np.nan)
     ll = 0.0
     for t in range(T):
         blk = blocked[t]
@@ -58,7 +59,16 @@ def kalman_filter(y: np.ndarray, blocked: np.ndarray, q_nivel: float, q_pend: fl
             m = upd & (n_obs > BURN_IN)
             ll += float(-0.5 * (np.log(2 * np.pi * S[m]) + v[m] ** 2 / S[m]).sum())
         out[t] = np.where(blk, np.nan, lvl)
-    return (out, ll) if return_loglik else out
+        out_s[t] = np.where(blk | np.isnan(lvl), np.nan, slp)
+    if return_loglik:
+        return out, ll
+    return (out, out_s) if return_slope else out
+
+
+def kalman_forecast(level: np.ndarray, slope: np.ndarray, horizon: int = 180) -> np.ndarray:
+    """Pronóstico del filtro de Kalman desde ``t0``: ``nivel + pendiente · h`` para h = 1..``horizon``."""
+    h = np.arange(1, horizon + 1)
+    return level[..., None] + slope[..., None] * h
 
 
 def fit_mle(y: np.ndarray, blocked: np.ndarray, x0=(-12.0, -18.0, -9.0)) -> dict:
