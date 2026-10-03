@@ -79,7 +79,7 @@ def next_jump_index(dates: pd.DatetimeIndex, cells: list[str], saltos: pd.DataFr
 
 
 # --------------------------------------------------------------------------- #
-# Tensores para el modelo (todo cabe en memoria de la GPU: ~2000 días × 362 celdas)
+# Tensores para el modelo (todo cabe en memoria de la GPU: ~2000 días × 2 × N celdas)
 # --------------------------------------------------------------------------- #
 FEATURES = ["v_rel", "kA_z", "vcel_z", "mascara"]
 
@@ -167,3 +167,46 @@ class SeriesTensors:
         if mask_jumps:
             mask &= tgt < self.next_jump[t, c][:, None]
         return x, torch.nan_to_num(y), mask, c, self.el_flag[c]
+
+
+class MatrixTensors:
+    """Lotes (grupo, origen) para los modelos que pronostican todas las celdas a la vez (A MIMO, C grafo, D TCN).
+
+    ``X[g]``: entradas diarias ``[T, ...]`` (ya normalizadas, sin NaN); ``Y[g]``: objetivos ``[T, N]`` normalizados
+    (NaN = no evaluable); ``VALID[g]``: ``[T, N]``. Misma interfaz que ``SeriesTensors`` (``origins``, ``batch``),
+    así que se entrenan con ``model.fit``; ``batch`` devuelve el índice de grupo en lugar del de celda.
+    """
+
+    def __init__(self, X: dict, Y: dict, VALID: dict, dates: pd.DatetimeIndex, device="cpu",
+                 lookback: int = config.LOOKBACK_DAYS, horizon: int = config.HORIZON_DAYS):
+        import torch
+
+        self.groups = list(X)
+        self.dates, self.L, self.H, self.device = dates, lookback, horizon, device
+
+        def st(d, dtype=torch.float32):
+            return torch.stack([torch.as_tensor(np.asarray(d[g]), dtype=dtype) for g in self.groups]).to(device)
+
+        self.X, self.Y, self.VALID = st(X), st(Y), st(VALID, torch.bool)
+        self.offs_in = torch.arange(-lookback + 1, 1, device=device)
+        self.offs_out = torch.arange(1, horizon + 1, device=device)
+
+    def origins(self, t_min: int, t_max: int, stride: int = 1, phase: int = 0):
+        import torch
+
+        t = torch.arange(max(t_min, self.L - 1), t_max + 1, device=self.device)
+        t = t[(t - phase) % stride == 0]
+        g = torch.arange(len(self.groups), device=self.device).repeat_interleave(len(t))
+        return g, t.repeat(len(self.groups))
+
+    def batch(self, c, t, target_limit: int, mask_jumps: bool = False):
+        import torch
+
+        win = t[:, None] + self.offs_in
+        x = self.X[c[:, None], win]
+        tgt = t[:, None] + self.offs_out
+        dentro = tgt <= min(target_limit, len(self.dates) - 1)
+        tgt = tgt.clamp(max=len(self.dates) - 1)
+        y = self.Y[c[:, None], tgt]  # [B, H, N]
+        mask = dentro[..., None] & self.VALID[c[:, None], tgt] & torch.isfinite(y)
+        return x, torch.nan_to_num(y), mask, c, c.float()

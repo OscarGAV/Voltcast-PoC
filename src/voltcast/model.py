@@ -154,6 +154,100 @@ class Seq2SeqAttention(nn.Module):
         return torch.cat(outs, dim=1)
 
 
+class MIMOBiNOALSTM(nn.Module):
+    """Propuesta A (benchmarking): Bi-NOA-LSTM **MIMO**. Matriz de entrada ``[B, L, n_in]`` (todas las celdas +
+    covariables) → matriz de salida ``[B, H, n_out]`` (todas las celdas) en un solo pase.
+
+    Proyección final densa sin activación (NOA en la celda y en la salida).
+    """
+
+    def __init__(self, n_in: int, n_out: int, hidden: int = 128, layers: int = 1, dropout: float = 0.2,
+                 horizon: int = config.HORIZON_DAYS, use_noa: bool = True):
+        super().__init__()
+        self.n_out, self.horizon = n_out, horizon
+        self.encoder = BiNOALSTM(n_in, hidden, layers, dropout, noa=use_noa)
+        self.drop = nn.Dropout(dropout)
+        self.proj = nn.Linear(2 * hidden, horizon * n_out)
+
+    def forward(self, x: Tensor, cell: Tensor | None = None, el_flag: Tensor | None = None) -> Tensor:
+        return self.proj(self.drop(self.encoder(x))).view(-1, self.horizon, self.n_out)
+
+
+class STGRU(nn.Module):
+    """Propuesta C: ST-GRU. En cada día, una convolución de grafo (GCN) mezcla cada celda con sus vecinas
+    (componente espacial); después una GRU recorre los ``L`` días de cada celda (componente temporal), con pesos
+    compartidos entre celdas; un cabezal lineal proyecta los ``H`` días de cada nodo.
+
+    Entrada ``[B, L, N, F]``; ``cell`` = índice del grafo (electrolizador) de cada muestra. Salida ``[B, H, N]``.
+    """
+
+    def __init__(self, adjacency: Tensor, n_features: int, gcn_dim: int = 32, hidden: int = 64,
+                 dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
+        super().__init__()
+        self.register_buffer("A", adjacency)  # [G, N, N] normalizada: D^-1/2 (A + I) D^-1/2
+        self.gcn1 = nn.Linear(n_features, gcn_dim)
+        self.gcn2 = nn.Linear(gcn_dim, gcn_dim)
+        self.gru = nn.GRU(gcn_dim, hidden, batch_first=True)
+        self.drop = nn.Dropout(dropout)
+        self.head = nn.Linear(hidden, horizon)
+
+    def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor | None = None) -> Tensor:
+        B, L, N, _ = x.shape
+        A = self.A[cell].unsqueeze(1)  # [B, 1, N, N]
+        z = torch.relu(A @ self.gcn1(x))  # [B, L, N, gcn]
+        z = torch.relu(A @ self.gcn2(z))
+        z = z.permute(0, 2, 1, 3).reshape(B * N, L, -1)  # cada celda como una secuencia
+        _, h = self.gru(z)
+        out = self.head(self.drop(h[-1])).view(B, N, -1)
+        return out.transpose(1, 2)
+
+
+class TCNBlock(nn.Module):
+    def __init__(self, ch: int, kernel: int, dilation: int, dropout: float):
+        super().__init__()
+        self.pad = (kernel - 1) * dilation  # relleno solo a la izquierda: convolución causal
+        self.c1 = nn.Conv1d(ch, ch, kernel, dilation=dilation)
+        self.c2 = nn.Conv1d(ch, ch, kernel, dilation=dilation)
+        self.drop = nn.Dropout(dropout)
+
+    def forward(self, x: Tensor) -> Tensor:
+        y = self.drop(torch.relu(self.c1(nn.functional.pad(x, (self.pad, 0)))))
+        y = self.drop(torch.relu(self.c2(nn.functional.pad(y, (self.pad, 0)))))
+        return torch.relu(x + y)  # conexión residual
+
+
+class TCNMultiOutput(nn.Module):
+    """Propuesta D: TCN multi-salida. Canales de entrada = celdas + covariables ``[B, L, n_in]``; convolución de
+    suavizado inicial, bloques residuales causales dilatados (1, 2, 4, 8, 16: campo receptivo > 30 días) y una
+    capa densa que proyecta en paralelo ``[B, H, n_out]``.
+    """
+
+    def __init__(self, n_in: int, n_out: int, channels: int = 64, kernel: int = 3,
+                 dilations: tuple = (1, 2, 4, 8, 16), dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
+        super().__init__()
+        self.n_out, self.horizon = n_out, horizon
+        self.smooth = nn.Conv1d(n_in, channels, 5, padding=0)
+        self.blocks = nn.Sequential(*[TCNBlock(channels, kernel, d, dropout) for d in dilations])
+        self.head = nn.Linear(channels, horizon * n_out)
+
+    def forward(self, x: Tensor, cell: Tensor | None = None, el_flag: Tensor | None = None) -> Tensor:
+        z = self.smooth(nn.functional.pad(x.transpose(1, 2), (4, 0)))  # [B, C, L] causal
+        z = self.blocks(z)[:, :, -1]  # representación en t0
+        return self.head(z).view(-1, self.horizon, self.n_out)
+
+
+class GroupModels(nn.Module):
+    """Un modelo por grupo (p. ej. por electrolizador). Todas las muestras de un lote deben ser del mismo grupo."""
+
+    def __init__(self, models: dict):
+        super().__init__()
+        self.models = nn.ModuleDict(models)
+        self.keys = list(models)
+
+    def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor | None = None) -> Tensor:
+        return self.models[self.keys[int(cell[0])]](x, cell, el_flag)
+
+
 class Ensemble(nn.Module):
     """Promedio de las salidas de varios modelos con la misma interfaz ``(x, cell, el_flag) → [B, H]``."""
 
@@ -269,9 +363,25 @@ VERSION = "voltcast-poc-0.1"
 
 
 def build_model(n_cells: int, n_features: int, cfg: dict, use_noa: bool = True) -> nn.Module:
-    """``cfg['arch'] == 'seq2seq'`` → ``Seq2SeqAttention``; si no, ``VoltCastNet`` (Bi-NOA-LSTM o Bi-LSTM)."""
-    if cfg.get("arch") == "seq2seq":
+    """Construye la red según ``cfg['arch']``.
+
+    ``seq2seq`` → ``Seq2SeqAttention``; ``mimo`` → ``MIMOBiNOALSTM``; ``tcn`` → ``TCNMultiOutput``;
+    ``stgru`` → ``STGRU`` (necesita ``cfg['adjacency']``); sin ``arch`` → ``VoltCastNet`` (Bi-NOA-LSTM o Bi-LSTM).
+    Con ``cfg['groups']``, un modelo por grupo (``GroupModels``).
+    """
+    arch = cfg.get("arch")
+    if cfg.get("groups"):
+        sub = {k: v for k, v in cfg.items() if k != "groups"}
+        return GroupModels({g: build_model(n_cells, n_features, sub, use_noa) for g in cfg["groups"]})
+    if arch == "seq2seq":
         return Seq2SeqAttention(n_cells, n_features, **{k: cfg[k] for k in SEQ2SEQ_KWARGS})
+    if arch == "mimo":
+        return MIMOBiNOALSTM(cfg["n_in"], cfg["n_out"], cfg["hidden"], cfg["layers"], cfg["dropout"])
+    if arch == "tcn":
+        return TCNMultiOutput(cfg["n_in"], cfg["n_out"], cfg["channels"], dropout=cfg["dropout"])
+    if arch == "stgru":
+        return STGRU(torch.as_tensor(cfg["adjacency"], dtype=torch.float32), cfg["n_features"], cfg["gcn_dim"],
+                     cfg["hidden"], cfg["dropout"])
     return VoltCastNet(n_cells, n_features, **{k: cfg[k] for k in MODEL_KWARGS}, use_noa=use_noa)
 
 

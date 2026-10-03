@@ -73,7 +73,7 @@ class SheetSchema:
 def detect_schema(df: pd.DataFrame, sheet: str = "") -> SheetSchema:
     """Identifica la fecha, [Volts], [kA] y las columnas de celdas (US002/US003).
 
-    Las celdas se detectan por encabezado numérico entero; se cuentan, no se asume 181.
+    Las celdas se detectan por encabezado numérico entero; se cuentan, no se asume un número fijo (hoy 150 por electrolizador).
     Lanza SchemaError con un mensaje descriptivo si falta algo.
     """
     where = f" en la hoja '{sheet}'" if sheet else ""
