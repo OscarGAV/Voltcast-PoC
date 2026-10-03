@@ -1,0 +1,28 @@
+horizonte,modelo,req · MAE_V < 0.1554,req · MSE_V2 < 0.0225,req · RMSE_V < 0.15,req · MAPE_% < 5,requisito mínimo (todos),C1 supera baselines,C2 supera al mejor Bench. (sig.),"C3 % celdas RMSE < 0,15 V",C3 cumple (≥ 95 %),C4 R² cambio > 0
+1–180,A1 · MIMO por EL (Bench. 1.º),True,True,True,True,True,False,,74.66666666666667,False,False
+1–180,A2 · MIMO conjunto (Bench. 1.º),True,True,True,True,True,False,,78.0,False,False
+1–180,C · ST-GRU (Bench. 2.º),True,True,True,True,True,False,,91.66666666666666,False,False
+1–180,D · TCN (Bench. 3.º),True,True,True,True,True,False,,74.66666666666667,False,False
+1–180,B · Seq2Seq-Att + Kalman (Bench. 4.º),True,True,True,True,True,False,,96.33333333333334,True,False
+1–180,Propio · Bi-NOA-LSTM,True,True,True,True,True,True,,97.66666666666667,True,False
+1–180,Propio · Bi-LSTM,True,True,True,True,True,True,,98.33333333333333,True,False
+1–180,Persistencia,True,True,True,True,True,,,98.33333333333333,True,False
+1–180,Tendencia lineal,True,True,True,True,True,,,80.0,False,False
+60,A1 · MIMO por EL (Bench. 1.º),True,True,True,True,True,False,,72.33333333333334,False,False
+60,A2 · MIMO conjunto (Bench. 1.º),True,True,True,True,True,False,,75.66666666666667,False,False
+60,C · ST-GRU (Bench. 2.º),True,True,True,True,True,False,,92.0,False,False
+60,D · TCN (Bench. 3.º),True,True,True,True,True,False,,78.33333333333333,False,False
+60,B · Seq2Seq-Att + Kalman (Bench. 4.º),True,True,True,True,True,False,,97.33333333333334,True,False
+60,Propio · Bi-NOA-LSTM,True,True,True,True,True,False,False,96.66666666666667,True,False
+60,Propio · Bi-LSTM,True,True,True,True,True,False,False,96.66666666666667,True,False
+60,Persistencia,True,True,True,True,True,,,97.33333333333334,True,False
+60,Tendencia lineal,True,True,True,True,True,,,92.33333333333333,False,False
+180,A1 · MIMO por EL (Bench. 1.º),True,True,True,True,True,False,,79.0,False,False
+180,A2 · MIMO conjunto (Bench. 1.º),True,True,True,True,True,False,,81.66666666666667,False,False
+180,C · ST-GRU (Bench. 2.º),True,True,True,True,True,False,,87.0,False,False
+180,D · TCN (Bench. 3.º),True,False,False,True,False,False,,69.66666666666667,False,False
+180,B · Seq2Seq-Att + Kalman (Bench. 4.º),True,True,True,True,True,False,,89.33333333333333,False,False
+180,Propio · Bi-NOA-LSTM,True,True,True,True,True,True,True,94.66666666666667,False,True
+180,Propio · Bi-LSTM,True,True,True,True,True,True,True,94.0,False,True
+180,Persistencia,True,True,True,True,True,,,93.0,False,False
+180,Tendencia lineal,True,False,False,True,False,,,65.0,False,False
