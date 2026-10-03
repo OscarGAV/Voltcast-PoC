@@ -24,6 +24,8 @@ Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de
 - Ningún modelo del Benchmarking supera a la persistencia; el ranking empírico (B > C > A > D) no coincide con el de la literatura (A > C > D > B).
 - **Límite:** el R² sobre el cambio de voltaje es ≈ 0 para todos los modelos. La ventaja de nuestro modelo es seguir mejor el nivel y la deriva de cada celda; ninguno anticipa los cambios individuales, dominados por las intervenciones de mantenimiento.
 
+- **Criterios de [`docs/metricas.md`](docs/metricas.md):** el requisito mínimo (RNF06: MAE < 5 % del nominal, RMSE < 0,15 V, MAPE < 5 %) lo cumplen 7 de los 9 modelos, incluida la persistencia, así que no distingue modelos. Con los criterios comparativos, a 180 días nuestro modelo supera a los baselines y al mejor del Benchmarking con significancia; a 60 días no.
+
 Detalle, figuras y discusión: notebook [`07_evaluacion.ipynb`](notebooks/07_evaluacion.ipynb) y [`reports/metricas_comparativas.csv`](reports/metricas_comparativas.csv).
 
 ## Instalación
