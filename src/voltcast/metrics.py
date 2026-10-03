@@ -66,6 +66,19 @@ def r2_global(pred, real, mask) -> float:
     return float(1 - ((r - p) ** 2).sum() / ((r - r.mean()) ** 2).sum())
 
 
+def r2_change(pred, real, ref, mask) -> float:
+    """R² sobre el **cambio** de voltaje respecto de un valor de referencia en ``t0`` (el último voltaje real):
+    ``Δ = y − ref`` y ``Δ̂ = ŷ − ref``; ``R² = 1 − Σ(Δ − Δ̂)² / Σ(Δ − Δ̄)²``.
+
+    Mide qué parte de la evolución futura anticipa el modelo, sin el efecto de las diferencias de nivel entre
+    celdas que infla el R² global. La persistencia (Δ̂ = 0) queda en ≈ 0 por definición.
+    """
+    ref = np.broadcast_to(ref, real.shape) if np.ndim(ref) == np.ndim(real) else np.broadcast_to(ref[..., None], real.shape)
+    m = mask & np.isfinite(ref)
+    d, dp = (real - ref)[m], (pred - ref)[m]
+    return float(1 - ((d - dp) ** 2).sum() / ((d - d.mean()) ** 2).sum())
+
+
 def mae(pred, real, mask, axis=None):
     return np.nanmean(_masked(np.abs(pred - real), mask), axis=axis)
 
@@ -87,10 +100,11 @@ def r2_per_cell(pred, real, mask):
         return np.where((n >= 3) & (sst > 0), 1 - sse / sst, np.nan)
 
 
-def summary_at(preds: dict, real, mask, h: int | None) -> pd.DataFrame:
+def summary_at(preds: dict, real, mask, h: int | None, ref=None) -> pd.DataFrame:
     """Métricas para cada modelo a horizonte ``h`` (1-indexado) o, con ``h=None``, sobre los horizontes 1–H juntos.
 
-    MAE, RMSE en V; MSE en V²; MAPE en %; R² global (todos los objetivos) y R² por celda (media y mediana).
+    MAE, RMSE en V; MSE en V²; MAPE en %; R² global (todos los objetivos), R² por celda (media y mediana) y,
+    si se pasa ``ref [O, C]`` (voltaje real en t0), R² sobre el cambio de voltaje.
     """
     filas = []
     for nombre, p in preds.items():
@@ -107,6 +121,7 @@ def summary_at(preds: dict, real, mask, h: int | None) -> pd.DataFrame:
             "MAE_V": float(mae(pk, rk, mk)), "MSE_V2": float(mse(pk, rk, mk)), "RMSE_V": float(rmse(pk, rk, mk)),
             "MAPE_%": float(mape(pk, rk, mk)), "R2_global": r2_global(pk, rk, mk),
             "R2_medio": float(np.nanmean(r2c)), "R2_mediana": float(np.nanmedian(r2c)),
+            "R2_cambio": r2_change(pk, rk, ref, mk) if ref is not None else np.nan,
         })
     return pd.DataFrame(filas)
 
