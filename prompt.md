@@ -257,8 +257,8 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 
 ---
 
-## PENDIENTES DE REVISIÓN
-- **Split 90/10:** evaluar `VAL_FRACTION = 0.10` (train hasta 2025-12-25, validación de 243 días). Se mantiene 80/20 porque con 90/10 la validación baja a ~35 orígenes y ~10 con horizonte completo de 180 días (menos evidencia estadística), dominada por la intervención de jul-2026. Si se aprueba, repetir todo desde el notebook 04, incluido SOMA (~4 h).
+## DECISIONES
+- **Split 80/20 (se descartó 90/10):** se evaluó `VAL_FRACTION = 0.10` (train hasta 2025-12-25, validación de 243 días) y se decidió mantener 80/20, porque con 90/10 la validación bajaría a ~35 orígenes y ~10 con horizonte completo de 180 días (menos evidencia estadística), dominada por la intervención de jul-2026.
 - **Despliegue:** usar el modelo evaluado (entrenado con el 80 %); el reentrenamiento con todos los datos queda para el plan de reentrenamiento del notebook 08.
 
 ## RIESGOS CONOCIDOS
