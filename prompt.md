@@ -24,6 +24,7 @@ Implementar, como una **serie de notebooks** organizada por **CRISP-DM** y con d
 | Propio | **Bi-LSTM estándar** | Igual, con `nn.LSTM` |
 | Referencia | **Persistencia** | `ŷ(t0 + h) = y(t0)`: último voltaje real observado |
 | Referencia | **Tendencia lineal** | Recta ajustada a los 30 días de la serie real sin filtrar, extrapolada |
+| Referencia | **ETS (Holt)** | Suavizado exponencial ETS(A,A,N), el método del pronóstico integrado de Power BI para series sin estacionalidad; parámetros elegidos con una ventana de validación de 182 días dentro de la historia hasta `t0` |
 
 **Dataset:** `VoltajesDiariosDesde2020.xlsx`, con registros **diarios** del 2020-01-01 al 2026-08-27 (~2420 filas por hoja), 150 celdas por electrolizador. `[Volts]` sigue sumando las 181 celdas físicas (`N_CELDAS_FISICAS`). `Dataset Sintetizado.xlsx` es un recorte del mismo origen y se usa solo para pruebas rápidas.
 
@@ -32,7 +33,7 @@ Implementar, como una **serie de notebooks** organizada por **CRISP-DM** y con d
 **Evaluación:**
 - Todos los modelos con el mismo split 80/20, las mismas fechas de origen de validación, la misma semilla (`SEED`) y un presupuesto de entrenamiento comparable (early stopping).
 - Métricas **MAE, MSE, RMSE, MAPE y R²**, globales, por celda y por horizonte (60 y 180 días), en **voltios** y contra la **señal real sin filtrar**, desnormalizando cada modelo.
-- `metricas_comparativas.csv` con el mejor modelo por métrica; % de mejora en MAE y RMSE de cada red frente a Persistencia y a Tendencia lineal (reportando explícitamente si alguna no los supera); tiempos de entrenamiento e inferencia; `Real vs. Predicho` de todos los modelos en celdas críticas; curva de error vs. horizonte (*error drift*); conclusión sobre si el ranking empírico coincide con el del Benchmarking.
+- `metricas_comparativas.csv` con el mejor modelo por métrica; % de mejora en MAE y RMSE de cada red frente a Persistencia, Tendencia lineal y ETS (reportando explícitamente si alguna no los supera); tiempos de entrenamiento e inferencia; `Real vs. Predicho` de todos los modelos en celdas críticas; curva de error vs. horizonte (*error drift*); conclusión sobre si el ranking empírico coincide con el del Benchmarking.
 
 > Nota: la inferencia directa elimina la acumulación de error *recursiva*, pero la incertidumbre crece naturalmente con el horizonte. Eso se mide; no se asume que sea nulo.
 
@@ -64,7 +65,7 @@ Poc-TP1/                                    # C:\Proyectos\Poc-TP1 (fuera de One
 │   ├── 06b_modelado_seq2seq_kalman.ipynb   # CRISP-DM 4  Propuesta B
 │   ├── 06c_modelado_propuesta_a.ipynb      # CRISP-DM 4  Propuesta A (A1, A2): RFR-SHAP + SOMA + MIMO
 │   ├── 06d_modelado_stgru_tcn.ipynb        # CRISP-DM 4  Propuestas C y D
-│   ├── 07_evaluacion.ipynb                 # CRISP-DM 5  comparativa de los 9 modelos
+│   ├── 07_evaluacion.ipynb                 # CRISP-DM 5  comparativa de los 10 modelos
 │   └── 08_despliegue.ipynb                 # CRISP-DM 6
 ├── src/voltcast/                           # código compartido (sin duplicar entre notebooks)
 │   ├── config.py      # rutas y parámetros
@@ -235,9 +236,9 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 ### 07 — Evaluación (CRISP-DM 5)
 - **Rolling-origin** sobre validación (orígenes cada `EVAL_STRIDE` días; el contexto de entrada puede venir de train).
 - Inferencia: las 362 celdas como un batch → matriz `[180, 362]` en un único forward pass por origen. Reconstrucción `V̂ = ancla + σ_Δ · ŷ`.
-- **Baselines:** persistencia (`ŷ = y(t0)`, último voltaje real observado) y tendencia lineal ajustada a los 30 días de la serie real sin filtrar.
+- **Baselines:** persistencia (`ŷ = y(t0)`, último voltaje real observado) tendencia lineal ajustada a los 30 días de la serie real sin filtrar y ETS(A,A,N) (Holt, el método de Power BI) sobre toda la historia real hasta `t0`, con α y β elegidos por una ventana de validación de 182 días; se reporta además su sensibilidad al método de selección.
 - Métricas por celda y globales, en V, contra la señal **real sin filtrar** y solo en fechas con calidad `ok`/`interpolado`: `MAE`, `MSE`, `RMSE`, `MAPE`, `R²` (global, por celda y **sobre el cambio de voltaje** respecto del valor real en `t0`, que mide qué parte de la evolución anticipa el modelo sin el efecto del nivel de cada celda).
-- Tabla comparativa de los 9 modelos (global 1–180, 60 y 180 días) → `reports/metricas_comparativas.csv`, con el mejor modelo por métrica, % de mejora frente a los baselines, tiempos de entrenamiento e inferencia y ranking empírico vs. Benchmarking.
+- Tabla comparativa de los 10 modelos (global 1–180, 60 y 180 días) → `reports/metricas_comparativas.csv`, con el mejor modelo por métrica, % de mejora frente a los baselines, tiempos de entrenamiento e inferencia y ranking empírico vs. Benchmarking.
 - Métricas reportadas también por separado para los pares (celda, origen) cuyo horizonte **cruza o no cruza** un salto de nivel (`saltos_nivel.parquet`).
 - Gráficos:
   - Curva de **error vs. horizonte** (RMSE día 1..180) de modelos y baselines.

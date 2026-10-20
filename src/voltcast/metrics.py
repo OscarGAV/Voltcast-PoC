@@ -45,6 +45,57 @@ def linear_trend(window: np.ndarray, horizon: int = config.HORIZON_DAYS) -> np.n
     return a[..., None] + b[..., None] * h
 
 
+ETS_ALPHAS = (0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0)
+ETS_BETAS = (0.0, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3)
+
+
+def ets_aan(series: np.ndarray, origins: np.ndarray, horizon: int = config.HORIZON_DAYS,
+            val_days: int = 182, val_step: int = 7) -> np.ndarray:
+    """ETS(A,A,N) / Holt lineal: el modelo no estacional del pronóstico de Power BI.
+
+    ``series [T, C]`` (NaN = sin dato) y ``origins`` (índices t0) → ``[O, C, H]``. Para cada celda y cada t0,
+    (α, β) se eligen en una grilla con una **ventana de validación** dentro de la historia: pronósticos desde
+    orígenes ``s`` cada ``val_step`` días en los ``val_days`` previos a t0, contra los valores reales hasta t0
+    (causal, error cuadrático en todos los pasos). Con ``val_days=0`` se eligen por el error a 1 paso sobre
+    toda la historia hasta t0. Con NaN el filtro proyecta sin corregir; se inicializa con el primer valor y
+    tendencia 0.
+    """
+    a, b = np.meshgrid(ETS_ALPHAS, ETS_BETAS, indexing="ij")
+    ok_g = (b <= a).ravel()                            # región admisible de ETS: 0 ≤ β ≤ α
+    a, b = a.ravel()[ok_g, None], b.ravel()[ok_g, None]  # [G, 1]
+    T, C = series.shape
+    origins = np.asarray(origins)
+    first = np.argmax(np.isfinite(series), axis=0)
+    val_s = {int(t0) - k for t0 in origins for k in range(val_step, val_days + 1, val_step) if t0 - k >= 0}
+    keep = sorted(val_s | {int(t) for t in origins})
+    at = {t: i for i, t in enumerate(keep)}
+    st_l, st_b = (np.empty((len(keep), len(a), C)) for _ in range(2))
+    lvl = np.broadcast_to(series[first, np.arange(C)], (len(a), C)).copy()
+    tr = np.zeros_like(lvl)
+    sse1, st_s = np.zeros_like(lvl), {}
+    for t in range(T):
+        e = series[t] - (lvl + tr)
+        e = np.where(np.isfinite(e) & (t > first), e, 0.0)
+        sse1 += e ** 2
+        lvl, tr = lvl + tr + a * e, tr + b * e
+        if t in at:
+            st_l[at[t]], st_b[at[t]], st_s[t] = lvl, tr, sse1.copy()
+    fc = np.full((len(origins), C, horizon), np.nan)
+    for i, t0 in enumerate(origins):
+        sse = np.zeros((len(a), C)) if val_days else st_s[int(t0)]
+        for k in range(val_step, val_days + 1, val_step):
+            s = t0 - k
+            if s < 0:
+                break
+            h = np.arange(1, k + 1)
+            err = series[s + 1:t0 + 1].T[None] - (st_l[at[s]][..., None] + st_b[at[s]][..., None] * h)  # [G, C, k]
+            sse += np.nansum(err ** 2, axis=-1)
+        g = sse.argmin(axis=0)                         # sin historia suficiente → primer punto de la grilla
+        j = at[int(t0)]
+        fc[i] = st_l[j][g, np.arange(C)][:, None] + st_b[j][g, np.arange(C)][:, None] * np.arange(1, horizon + 1)
+    return np.where((origins[:, None] >= first)[..., None], fc, np.nan)
+
+
 # --------------------------------------------------------------------------- #
 # Métricas
 # --------------------------------------------------------------------------- #

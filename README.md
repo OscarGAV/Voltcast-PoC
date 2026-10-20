@@ -1,6 +1,6 @@
 # VoltCast — PoC de pronóstico de voltaje por celda
 
-Prueba de Concepto para pronosticar el **voltaje de cada celda** de los electrolizadores EL A y EL B (150 celdas por electrolizador en el dataset actual) con horizontes de **1 a 180 días**, comparando **nuestro modelo** con los 4 modelos mejor puntuados en un Benchmarking de la literatura y con 2 métodos de referencia.
+Prueba de Concepto para pronosticar el **voltaje de cada celda** de los electrolizadores EL A y EL B (150 celdas por electrolizador en el dataset actual) con horizontes de **1 a 180 días**, comparando **nuestro modelo** con los 4 modelos mejor puntuados en un Benchmarking de la literatura y con 3 métodos de referencia, uno de ellos el método del pronóstico integrado de Power BI (ETS).
 
 El proyecto está organizado como una serie de notebooks según **CRISP-DM**, con los datos en **arquitectura Medallion** (Bronze → Silver → Gold). La especificación completa está en [`prompt.md`](prompt.md).
 
@@ -13,18 +13,20 @@ Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de
 | 1 | **Propio · Bi-LSTM** (modelo elegido) | **0,0585 V** | **0,0270 V** | 0,0691 V |
 | 2 | Propio · Bi-NOA-LSTM | 0,0601 V | 0,0274 V | **0,0689 V** |
 | 3 | Persistencia (referencia) | 0,0602 V | 0,0334 V | 0,0787 V |
-| 4 | B · Seq2Seq BiLSTM + atención + Kalman (Benchmarking 4.º) | 0,0744 V | 0,0428 V | 0,1037 V |
-| 5 | C · ST-GRU (Benchmarking 2.º) | 0,0879 V | 0,0604 V | 0,0977 V |
-| 6 | A2 · BO-VMD + SOMA-Bi-NOA-LSTM, MIMO conjunto (Benchmarking 1.º) | 0,1143 V | 0,0892 V | 0,1112 V |
-| 7 | Tendencia lineal (referencia) | 0,1179 V | 0,0473 V | 0,1989 V |
-| 8 | A1 · BO-VMD + SOMA-Bi-NOA-LSTM, MIMO por electrolizador (Benchmarking 1.º) | 0,1186 V | 0,0892 V | 0,1130 V |
-| 9 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1487 V | 0,1038 V | 0,1651 V |
+| 4 | ETS · Holt, método del pronóstico de Power BI (referencia) | 0,0694 V | 0,0323 V | 0,0962 V |
+| 5 | B · Seq2Seq BiLSTM + atención + Kalman (Benchmarking 4.º) | 0,0744 V | 0,0428 V | 0,1037 V |
+| 6 | C · ST-GRU (Benchmarking 2.º) | 0,0879 V | 0,0604 V | 0,0977 V |
+| 7 | A2 · BO-VMD + SOMA-Bi-NOA-LSTM, MIMO conjunto (Benchmarking 1.º) | 0,1143 V | 0,0892 V | 0,1112 V |
+| 8 | Tendencia lineal (referencia) | 0,1179 V | 0,0473 V | 0,1989 V |
+| 9 | A1 · BO-VMD + SOMA-Bi-NOA-LSTM, MIMO por electrolizador (Benchmarking 1.º) | 0,1186 V | 0,0892 V | 0,1130 V |
+| 10 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1487 V | 0,1038 V | 0,1651 V |
 
 - Nuestras variantes son las mejores en todas las métricas sobre el horizonte completo y, a 180 días, superan al mejor modelo del Benchmarking con significancia estadística. A 60 días la ventaja no es significativa y la persistencia queda levemente mejor en RMSE.
+- **Frente a Power BI:** nuestro modelo supera a ETS (Holt), el método de su pronóstico integrado, en todas las métricas y horizontes. ETS depende mucho de cómo se eligen sus parámetros: sin tendencia (β = 0) se comporta como una persistencia suavizada y, como ella, queda algo mejor que nuestro modelo en RMSE a 60 días (sección 4.1 del notebook 07).
 - Ningún modelo del Benchmarking supera a la persistencia; el ranking empírico (B > C > A > D) no coincide con el de la literatura (A > C > D > B).
 - **Límite:** el R² sobre el cambio de voltaje es ≈ 0 para todos los modelos. La ventaja de nuestro modelo es seguir mejor el nivel y la deriva de cada celda; ninguno anticipa los cambios individuales, dominados por las intervenciones de mantenimiento.
 
-- **Criterios de [`docs/metricas.md`](docs/metricas.md):** el requisito mínimo (RNF06: MAE < 5 % del nominal, RMSE < 0,15 V, MAPE < 5 %) lo cumplen 7 de los 9 modelos, incluida la persistencia, así que no distingue modelos. Con los criterios comparativos, a 180 días nuestro modelo supera a los baselines y al mejor del Benchmarking con significancia; a 60 días no.
+- **Criterios de [`docs/metricas.md`](docs/metricas.md):** el requisito mínimo (RNF06: MAE < 5 % del nominal, RMSE < 0,15 V, MAPE < 5 %) lo cumplen 8 de los 10 modelos, incluidas la persistencia y ETS, así que no distingue modelos. Con los criterios comparativos, a 180 días nuestro modelo supera a los baselines y al mejor del Benchmarking con significancia; a 60 días no.
 
 Detalle, figuras y discusión: notebook [`07_evaluacion.ipynb`](notebooks/07_evaluacion.ipynb) y [`reports/metricas_comparativas.csv`](reports/metricas_comparativas.csv).
 
@@ -67,7 +69,7 @@ Abrir los notebooks con el kernel **VoltCast (.venv 3.13)** y ejecutarlos en ord
 | `06b_modelado_seq2seq_kalman` | 4 | Propuesta B: Seq2Seq + atención + ensamble con Kalman | 14 min |
 | `06c_modelado_propuesta_a` | 4 | Propuesta A (A1 y A2): RFR-SHAP + SOMA + Bi-NOA-LSTM MIMO | ~3 h (SOMA) |
 | `06d_modelado_stgru_tcn` | 4 | Propuestas C (ST-GRU) y D (TCN) | 8 min |
-| `07_evaluacion` | 5 | Comparación de los 9 modelos, ranking y conclusiones | 1 min |
+| `07_evaluacion` | 5 | Comparación de los 10 modelos, ranking y conclusiones | 2 min |
 
 Los notebooks también pueden ejecutarse en **Google Colab**: detectan Colab, montan Google Drive y buscan el proyecto en `MyDrive/Poc-TP1`.
 
@@ -115,4 +117,4 @@ Se evaluó pasar de 80/20 a **90/10** (train hasta 2025-12-25, validación de 24
 
 - **A favor:** el modelo aprende de 8 meses más de datos, los más recientes.
 - **En contra:** la validación baja de 70 a ~35 fechas de origen y de 44 a ~10 con el horizonte completo de 180 días (todas entre dic-2025 y feb-2026), por lo que la evidencia a 180 días pierde solidez; además, queda dominada por la intervención de jul-2026 en el EL A.
-- **Si se aprueba:** cambiar `VAL_FRACTION = 0.10` en [`config.py`](src/voltcast/config.py) y **repetir todo desde el notebook 04** (split, BO-VMD, Kalman y los 9 modelos, incluido SOMA de la Propuesta A): ~4 h de cómputo en una RTX 4060.
+- **Si se aprueba:** cambiar `VAL_FRACTION = 0.10` en [`config.py`](src/voltcast/config.py) y **repetir todo desde el notebook 04** (split, BO-VMD, Kalman y los 10 modelos, incluido SOMA de la Propuesta A): ~4 h de cómputo en una RTX 4060.
