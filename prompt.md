@@ -65,6 +65,7 @@ Poc-TP1/                                    # C:\Proyectos\Poc-TP1 (fuera de One
 │   ├── 06b_modelado_seq2seq_kalman.ipynb   # CRISP-DM 4  Propuesta B
 │   ├── 06c_modelado_propuesta_a.ipynb      # CRISP-DM 4  Propuesta A (A1, A2): RFR-SHAP + SOMA + MIMO
 │   ├── 06d_modelado_stgru_tcn.ipynb        # CRISP-DM 4  Propuestas C y D
+│   ├── 06e_mejora_modelo_propio.ipynb      # CRISP-DM 4  ensamble de semillas + riesgo de intervención (CV en train)
 │   ├── 07_evaluacion.ipynb                 # CRISP-DM 5  comparativa de los 10 modelos
 │   └── 08_despliegue.ipynb                 # CRISP-DM 6
 ├── src/voltcast/                           # código compartido (sin duplicar entre notebooks)

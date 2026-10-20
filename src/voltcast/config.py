@@ -98,6 +98,7 @@ SEQ2SEQ = {
     "max_epochs": 40, "patience": 6, "stride": 10,  # decoder de 180 pasos: épocas más caras → orígenes cada 10 días
 }
 ENSEMBLE_SEEDS = [42, 43, 44]
+PROPIO_SEEDS = [42, 43, 44, 45, 46]  # ensamble de semillas de la Bi-LSTM v2 (notebook 06e)
 FUSION_ALPHAS = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]  # ensamble red + Kalman (Khan et al., 2026)
 
 # Propuesta A tal cual el Benchmarking: MIMO + SOMA + RFR-SHAP + Min-Max

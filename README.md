@@ -24,6 +24,7 @@ Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de
 - Nuestras variantes son las mejores en todas las métricas sobre el horizonte completo y, a 180 días, superan al mejor modelo del Benchmarking con significancia estadística. A 60 días la ventaja no es significativa y la persistencia queda levemente mejor en RMSE.
 - **Frente a Power BI:** nuestro modelo supera a ETS (Holt), el método de su pronóstico integrado, en todas las métricas y horizontes. ETS depende mucho de cómo se eligen sus parámetros: sin tendencia (β = 0) se comporta como una persistencia suavizada y, como ella, queda algo mejor que nuestro modelo en RMSE a 60 días (sección 4.1 del notebook 07).
 - Ningún modelo del Benchmarking supera a la persistencia; el ranking empírico (B > C > A > D) no coincide con el de la literatura (A > C > D > B).
+- **Intento de mejora (notebook 06e):** ensamble de 5 semillas y corrección por riesgo de intervención (las intervenciones se concentran en las celdas de mayor voltaje). Mejora apenas en validación (RMSE 1–180 0,0580 V; 60 días 0,0576 V) y no cierra ningún criterio, así que se mantiene la Bi-LSTM original.
 - **Límite:** el R² sobre el cambio de voltaje es ≈ 0 para todos los modelos. La ventaja de nuestro modelo es seguir mejor el nivel y la deriva de cada celda; ninguno anticipa los cambios individuales, dominados por las intervenciones de mantenimiento.
 
 - **Criterios de [`docs/metricas.md`](docs/metricas.md):** el requisito mínimo (RNF06: MAE < 5 % del nominal, RMSE < 0,15 V, MAPE < 5 %) lo cumplen 8 de los 10 modelos, incluidas la persistencia y ETS, así que no distingue modelos. Con los criterios comparativos, a 180 días nuestro modelo supera a los baselines y al mejor del Benchmarking con significancia; a 60 días no.
@@ -69,6 +70,7 @@ Abrir los notebooks con el kernel **VoltCast (.venv 3.13)** y ejecutarlos en ord
 | `06b_modelado_seq2seq_kalman` | 4 | Propuesta B: Seq2Seq + atención + ensamble con Kalman | 14 min |
 | `06c_modelado_propuesta_a` | 4 | Propuesta A (A1 y A2): RFR-SHAP + SOMA + Bi-NOA-LSTM MIMO | ~3 h (SOMA) |
 | `06d_modelado_stgru_tcn` | 4 | Propuestas C (ST-GRU) y D (TCN) | 8 min |
+| `06e_mejora_modelo_propio` | 4 | Intento de mejora: ensamble de 5 semillas + riesgo de intervención, elegido con validación cruzada dentro de train | 30 min |
 | `07_evaluacion` | 5 | Comparación de los 10 modelos, ranking y conclusiones | 2 min |
 
 Los notebooks también pueden ejecutarse en **Google Colab**: detectan Colab, montan Google Drive y buscan el proyecto en `MyDrive/Poc-TP1`.
@@ -109,7 +111,7 @@ Poc-TP1/
 ## Pendiente
 
 - Notebook 08 (despliegue): función `predecir(fecha, celda)`, exportación de pronósticos y plan de monitoreo y reentrenamiento.
-- Entrenamiento con varias semillas para confirmar las diferencias pequeñas entre modelos.
+- Criterios abiertos de `docs/metricas.md`: C1 y C2 a 60 días, C3 a 180 días y C4. El error dominante son las intervenciones de mantenimiento; para reducirlo hace falta el registro de mantenimientos o el plan de campañas.
 
 ## Decisiones
 

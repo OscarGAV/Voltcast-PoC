@@ -392,7 +392,10 @@ def save_checkpoint(path, model: nn.Module, meta: dict) -> None:
 
 def load_checkpoint(path, device="cpu") -> tuple[nn.Module, dict]:
     ck = torch.load(path, map_location=device, weights_only=False)
-    model = build_model(len(ck["cells"]), len(ck["features"]), ck["train_cfg"], ck.get("use_noa", True))
+    def uno():
+        return build_model(len(ck["cells"]), len(ck["features"]), ck["train_cfg"], ck.get("use_noa", True))
+
+    model = Ensemble([uno() for _ in range(ck["n_modelos"])]) if ck.get("n_modelos") else uno()  # ensamble de semillas
     model.load_state_dict(ck["state_dict"])
     return model.to(device).eval(), ck
 

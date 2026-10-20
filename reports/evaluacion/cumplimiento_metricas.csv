@@ -6,6 +6,7 @@ horizonte,modelo,req · MAE_V < 0.1554,req · MSE_V2 < 0.0225,req · RMSE_V < 0.
 1–180,B · Seq2Seq-Att + Kalman (Bench. 4.º),True,True,True,True,True,False,,96.33333333333334,True,False
 1–180,Propio · Bi-NOA-LSTM,True,True,True,True,True,True,,97.66666666666667,True,False
 1–180,Propio · Bi-LSTM,True,True,True,True,True,True,,98.33333333333333,True,False
+1–180,Propio · Bi-LSTM v2,True,True,True,True,True,True,,98.33333333333333,True,False
 1–180,Persistencia,True,True,True,True,True,,,98.33333333333333,True,False
 1–180,Tendencia lineal,True,True,True,True,True,,,80.0,False,False
 1–180,"ETS (Holt, método de Power BI)",True,True,True,True,True,,,96.0,True,False
@@ -16,6 +17,7 @@ horizonte,modelo,req · MAE_V < 0.1554,req · MSE_V2 < 0.0225,req · RMSE_V < 0.
 60,B · Seq2Seq-Att + Kalman (Bench. 4.º),True,True,True,True,True,False,,97.33333333333334,True,False
 60,Propio · Bi-NOA-LSTM,True,True,True,True,True,False,False,96.66666666666667,True,False
 60,Propio · Bi-LSTM,True,True,True,True,True,False,False,96.66666666666667,True,False
+60,Propio · Bi-LSTM v2,True,True,True,True,True,False,False,96.33333333333334,True,False
 60,Persistencia,True,True,True,True,True,,,97.33333333333334,True,False
 60,Tendencia lineal,True,True,True,True,True,,,92.33333333333333,False,False
 60,"ETS (Holt, método de Power BI)",True,True,True,True,True,,,97.0,True,False
@@ -26,6 +28,7 @@ horizonte,modelo,req · MAE_V < 0.1554,req · MSE_V2 < 0.0225,req · RMSE_V < 0.
 180,B · Seq2Seq-Att + Kalman (Bench. 4.º),True,True,True,True,True,False,,89.33333333333333,False,False
 180,Propio · Bi-NOA-LSTM,True,True,True,True,True,True,True,94.66666666666667,False,True
 180,Propio · Bi-LSTM,True,True,True,True,True,True,True,94.0,False,True
+180,Propio · Bi-LSTM v2,True,True,True,True,True,True,True,93.33333333333333,False,False
 180,Persistencia,True,True,True,True,True,,,93.0,False,False
 180,Tendencia lineal,True,False,False,True,False,,,65.0,False,False
 180,"ETS (Holt, método de Power BI)",True,True,True,True,True,,,85.66666666666667,False,False
