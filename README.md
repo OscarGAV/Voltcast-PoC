@@ -27,7 +27,8 @@ Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de
 - **Intento de mejora (notebook 06e):** ensamble de 5 semillas y corrección por riesgo de intervención (las intervenciones se concentran en las celdas de mayor voltaje). Mejora apenas en validación (RMSE 1–180 0,0580 V; 60 días 0,0576 V) y no cierra ningún criterio, así que se mantiene la Bi-LSTM original.
 - **Límite:** el R² sobre el cambio de voltaje es ≈ 0 para todos los modelos. La ventaja de nuestro modelo es seguir mejor el nivel y la deriva de cada celda; ninguno anticipa los cambios individuales, dominados por las intervenciones de mantenimiento.
 
-- **Criterios de [`docs/metricas.md`](docs/metricas.md):** el requisito mínimo (RNF06: MAE < 5 % del nominal, RMSE < 0,15 V, MAPE < 5 %) lo cumplen 8 de los 10 modelos, incluidas la persistencia y ETS, así que no distingue modelos. Con los criterios comparativos, a 180 días nuestro modelo supera a los baselines y al mejor del Benchmarking con significancia; a 60 días no.
+- **Requisito de finalización: cumplido.** La Bi-LSTM cumple los criterios de la documentación del proyecto (OB2 Tabla 10 / RNF-06: MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en todos los horizontes y supera a los 5 modelos del Benchmarking en las 5 métricas. A1 y A2 (la propuesta ganadora del Benchmarking) y D no cumplen el requisito: su R² queda por debajo de 0. Ver [`docs/metricas.md`](docs/metricas.md).
+- **Criterios comparativos C1–C4** (propios de la PoC, complementarios): a 180 días nuestro modelo supera a los baselines y al mejor del Benchmarking con significancia; a 60 días no, por las intervenciones de mantenimiento (detalle en [`docs/intentos_mejora.md`](docs/intentos_mejora.md)).
 
 Detalle, figuras y discusión: notebook [`07_evaluacion.ipynb`](notebooks/07_evaluacion.ipynb) y [`reports/metricas_comparativas.csv`](reports/metricas_comparativas.csv).
 
@@ -111,7 +112,8 @@ Poc-TP1/
 ## Pendiente
 
 - Notebook 08 (despliegue): función `predecir(fecha, celda)`, exportación de pronósticos y plan de monitoreo y reentrenamiento.
-- Criterios abiertos de `docs/metricas.md`: C1 y C2 a 60 días, C3 a 180 días y C4. El error dominante son las intervenciones de mantenimiento; para reducirlo hace falta el registro de mantenimientos o el plan de campañas.
+- Criterios comparativos abiertos (complementarios, no bloquean la finalización): C1 y C2 a 60 días, C3 a 180 días y C4. El error dominante son las intervenciones de mantenimiento, cuyo momento no se puede anticipar con los datos.
+- Búsqueda de hiperparámetros de la Bi-LSTM (la documentación prevé reajustarlos automáticamente si no se cumplen los criterios).
 
 ## Decisiones
 

@@ -3,19 +3,31 @@
 
 Todas las métricas se calculan **en voltios por celda**, desnormalizando cada modelo y comparando contra el **voltaje real sin filtrar** del período de validación (fuera de muestra), solo en fechas con dato válido. Se reportan sobre el horizonte completo (1–180 días) y en los cortes de **60 y 180 días**.
 
-### 1. Requisito mínimo (RNF06)
+### 1. Requisito de la documentación del proyecto (OB2 – Diseño de Arquitectura, Tabla 10 y RNF-06)
+
+Son los criterios de evaluación del modelo definidos en la documentación del proyecto. Se miden en fechas que el modelo no usó al entrenarse.
 
 | Métrica | Justificación | Criterio esperado |
 | --- | --- | --- |
-| MAE (Mean Absolute Error) | Promedio de los errores absolutos entre predicciones y valores reales. Interpretación lineal y directa de la magnitud del error en voltios. | MAE < 5 % del voltaje nominal **de una celda** (≈ 3,1 V → MAE < 0,155 V). |
-| RMSE (Root Mean Squared Error) | Raíz de la media de los errores al cuadrado. Penaliza las desviaciones grandes y permite identificar picos de error o fallas graves en la estimación. | RMSE < 0,15 V. |
-| MSE (Mean Squared Error) | Media de los errores al cuadrado. Se usa como función de pérdida (*loss*) al entrenar las redes en PyTorch y cuantifica la varianza del error. | MSE < 0,0225 V² (equivale a RMSE < 0,15 V). |
-| MAPE (Mean Absolute Percentage Error) | Porcentaje de error absoluto relativo al valor real. Evalúa la precisión de forma independiente del nivel de voltaje de cada celda. | MAPE < 5 % global en el conjunto de validación. |
-| R² (coeficiente de determinación) | Proporción de la variación de los voltajes reales que explica el modelo. | Se reporta (global y por celda); sin umbral. |
+| MAE (Mean Absolute Error) | Promedio de los errores absolutos entre predicciones y valores reales. Interpretación lineal y directa de la magnitud del error en voltios. | MAE < 5 % respecto al voltaje real (RNF-06); con la media de las celdas en validación, ≈ 3,1 V → MAE < 0,155 V. |
+| RMSE (Root Mean Squared Error) | Raíz de la media de los errores al cuadrado. Penaliza las desviaciones grandes y permite identificar picos de error o fallas graves en la estimación. | RMSE < 0,15 V, para indicar que no hay errores grandes aislados. |
+| MSE (Mean Squared Error) | Media de los errores al cuadrado. Es la función de pérdida (*loss*) del entrenamiento. | En entrenamiento: el error deja de bajar en iteraciones consecutivas (early stopping). En validación: MSE < 0,0225 V² (equivale a RMSE < 0,15 V). |
+| MAPE (Mean Absolute Percentage Error) | Porcentaje de error absoluto relativo al valor real. Evalúa la precisión de forma independiente del nivel de voltaje de cada celda. | MAPE < 5 % en las fechas que el modelo no usó al entrenarse. |
+| R² (coeficiente de determinación) | Indica si el modelo es más preciso que una predicción basada en el promedio. | R² > 0 en las fechas que el modelo no usó al entrenarse (R² global; el R² por celda se reporta sin umbral). |
 
-> **Limitación del requisito mínimo:** con estos umbrales, el modelo más simple (persistencia: repetir el último voltaje observado) y casi todos los modelos del Benchmarking también cumplen. Sirven para verificar que el error es aceptable, pero **no** para demostrar que un modelo es mejor que otro. Para eso están los criterios comparativos.
+> **Nota:** la documentación indica TensorFlow como framework de entrenamiento; la PoC se implementó en PyTorch. Las métricas no dependen del framework.
 
-### 2. Criterios comparativos (para demostrar que nuestro modelo es mejor)
+> **Limitación:** con estos umbrales también cumple el modelo más simple (persistencia: repetir el último voltaje observado). Verifican que el error es aceptable, pero **no** demuestran que un modelo es mejor que otro. Para eso está la comparación con el Benchmarking y los criterios comparativos.
+
+### Requisito de finalización de la PoC
+
+La PoC se considera finalizada cuando un modelo propio:
+1. cumple todos los criterios de la sección 1 en el horizonte completo (1–180 días) y a 60 y 180 días; y
+2. supera a los modelos del Benchmarking (A1, A2, B, C y D) en MAE, MSE, RMSE, MAPE y R², evaluados en las mismas condiciones (mismo split 80/20, mismos objetivos, voltaje real sin filtrar).
+
+### 2. Criterios comparativos (propios de la PoC, complementarios)
+
+No forman parte de la documentación del proyecto ni del requisito de finalización. Son más exigentes y se reportan como evidencia adicional de que nuestro modelo es mejor, con sus límites explicados.
 
 | Criterio | Qué exige | Por qué |
 | --- | --- | --- |
