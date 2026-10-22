@@ -351,6 +351,29 @@ Primero se probó la ventana con el ancla actual (7 días); después, como la ve
 - **El ancla de 3 días es interior**: 1 y 2 días empeoran, igual que 7 y 14.
 - **Los modelos del Benchmarking mantienen 30 días** (decisión de la sección 6.3); probar su ventana queda como mejora (sección 11, #6).
 
+
+**Etapa 3: resto de la configuración de la Bi-LSTM** (base: ventana 5, ancla 3, señal sin 3 modos)
+
+Se cambió **un factor por vez** respecto de la base; cuando el ganador quedó en el borde de su grilla, la grilla se extendió. Al final se verificó la combinación de los ganadores.
+
+| Factor | Valores probados (RMSE relativo a la base, ± error estándar) | Decisión |
+|---|---|---|
+| Embedding de celda | 4: 1,0044 ± 0,0075 · **8: 1,0000** · 16: 1,0060 ± 0,0055 | **8** (interior) |
+| Ventana de detección de saltos (R9) | 3: 1,0095 ± 0,0058 · 5: 1,0012 ± 0,0009 · **7: 1,0000** · 14: 1,0064 ± 0,0022 | **7 días** (interior) |
+| Umbral de saltos (R9) | 0,02: 1,0073 ± 0,0044 · **0,03: 0,9910 ± 0,0010** · 0,05: 0,9969 ± 0,0013 · 0,10: 1,0000 · 0,15: 1,0011 ± 0,0020 | **0,03 V** (interior) |
+| Lote | 512: 1,0076 ± 0,0029 · **1024: 1,0000** · 2048: 1,0020 ± 0,0047 | **1024** (interior). Tiempo por configuración: 355, 185 y 115 s |
+| Orígenes de train | **cada 5 días: 1,0000** · cada 1 día con las mismas actualizaciones (9 épocas): 1,0063 ± 0,0053 · cada 1 día con 45 épocas: 1,0185 ± 0,0068 | **Cada 5 días**; además cuesta 5 veces menos |
+| Recorte de covariables (\|z\|) | 1: 1,0021 ± 0,0010 · 2: 0,9946 ± 0,0037 · 3: 0,9966 ± 0,0025 · **5: 1,0000** · sin recorte: 1,0034 ± 0,0032 | **5.** Con el umbral de saltos definitivo (0,03 V), recortar en 2 da exactamente lo mismo que en 5 (1,0000 ± 0,0020); ante un empate se mantiene el valor actual. Sin recorte el error es mayor |
+| Canal de máscara | sin: 1,0025 ± 0,0003 | **Se mantiene** |
+| Indicador de electrolizador | sin: 1,0007 ± 0,0023 | **Se mantiene** (menor error; equivalente) |
+| kA como entrada | sin: 1,1143 ± 0,0191 | **Se mantiene** (+11 % sin ella) |
+| V_total / celdas en servicio como entrada | sin: 1,0552 ± 0,0039 | **Se mantiene** (+5,5 %) |
+| Objetivo relativo al ancla | absoluto (respecto del voltaje medio de train, 3,156 V): 1,0474 ± 0,0047 | **Relativo al ancla** (+4,7 % con absoluto) |
+
+**Configuración de la Bi-LSTM que surge del paso 3:** señal VMD sin los 3 modos de mayor frecuencia, ventana de 5 días, ancla de 3 días, embedding de 8, saltos de nivel para la máscara con umbral de 0,03 V y ventana de 7 días, recorte de covariables a \|z\| ≤ 5, lote de 1024 y orígenes cada 5 días. Frente a la configuración anterior del banco (ventana 30, ancla 7, sin 1 modo, umbral 0,10), el RMSE baja ~1,3 %.
+
+**Sobre el umbral de 0,03 V:** está por debajo de la variación normal de 7 días (el 99 % de las diferencias es menor que 0,037 V), así que la máscara de entrenamiento también marca variaciones chicas, no solo intervenciones. Se adopta porque es el de menor error. Su efecto se limita a la máscara de entrenamiento: no cambia las entradas, los objetivos de evaluación ni las métricas. **Decisión pendiente:** la regla R9 cumple dos funciones. Para la máscara de entrenamiento se decidió 0,03 V por menor error. Para el diagnóstico de la evaluación (separar los objetivos que cruzan una intervención) no aplica el criterio de menor error, porque no es una predicción; hay que decidir si se usa el mismo 0,03 V o 0,10 V, que es el valor que el análisis exploratorio asocia con intervenciones (sección 6.2).
+
 **Limitación del banco de pruebas:** todas las configuraciones se entrenan 45 épocas fijas (las que eligió el early stopping de la configuración anterior). Una configuración podría necesitar más o menos épocas; en el entrenamiento final, las épocas se eligen con early stopping (paciencia 20).
 
 ---
