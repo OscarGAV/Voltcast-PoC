@@ -302,7 +302,8 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
   - Para elegir un valor dentro de una grilla se usa **el menor error** en la validación cruzada de 3 bloques con 3 semillas, como en las fuentes del Benchmarking, informando el error estándar y declarando equivalentes los valores que queden dentro de ese margen.
 - **Bi-LSTM v2 (notebook 06e): intento descartado.** No es mejor que la Bi-LSTM original, así que se quita de la comparación (notebook 07, ranking, README); el notebook 06e y `docs/intentos_mejora.md` quedan como registro del intento.
 - **Horizonte de 180 días:** es un requisito de planificación de 6 meses, expresado como 6 × 30 = 180 días; el 75 % de los intervalos entre campañas de mantenimiento dura ≤ ~178 días.
-- **Ventana de 30 días:** hoy solo viene de la especificación, sin fundamento propio. Se fundamentará con la grilla de 7, 14, 30, 60 y 90 días, eligiendo la de menor error (prueba pendiente); el resultado puede ser otro valor.
+- **Ventana de entrada por modelo:** la Bi-LSTM propia usa la ventana elegida por su prueba de menor error (`docs/hiperparametros.md`, 6.4); los modelos del Benchmarking mantienen 30 días (especificación, igual para todos). Probar la ventana de cada modelo del Benchmarking queda como mejora (sección 11).
+- **Ventana de 30 días (antes de la prueba):** venía solo de la especificación, sin fundamento propio. Se fundamentará con la grilla de 7, 14, 30, 60 y 90 días, eligiendo la de menor error (prueba pendiente); el resultado puede ser otro valor.
 
 ## RIESGOS CONOCIDOS
 - **Datos de entrenamiento:** ~1935 días de train y ~484 de validación, con ~305 orígenes posibles para H=180, muy solapados. Hay pocas trayectorias independientes de 180 días.

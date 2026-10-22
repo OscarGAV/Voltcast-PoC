@@ -349,7 +349,7 @@ No es necesario para fundamentar la configuración (sección 4.1), pero queda de
 | Ancla (días promediados) | [3, 14] | entera | Prueba | No está en las fuentes (contribución propia); va de casi el último valor a dos semanas, siempre menor que la ventana |
 | Embedding de celda | [4, 16] | entera | Prueba | No está en las fuentes (contribución propia: pesos compartidos entre celdas) |
 
-Costo estimado: ~6 h. Para los otros modelos, el camino 2 sería: A, SOMA con los parámetros y el espacio de Makri y la regla de parada (10–20 h por variante); B, búsqueda TPE con el espacio de Khan, incluidos q, R y α (~8 h); C, Optuna con el espacio de Palan, 20 trials (~2–3 h); D, la grilla de Morcillo (~0,5 h).
+Costo estimado: ~6 h. La lista completa de mejoras del camino 2 está en la sección 11.
 
 ---
 
@@ -393,6 +393,23 @@ El orden importa porque cada paso cambia los datos que usa el siguiente: las pru
 7. Merge a `main`.
 
 **Tiempo estimado:** se actualiza al cerrar el inventario de la sección 10 (las pruebas de limpieza con el criterio de menor error suman ~2 h).
+
+---
+
+## 11. Mejoras posibles (no se ejecutan en esta PoC)
+
+Quedan documentadas como trabajo futuro. Ninguna es necesaria para fundamentar la configuración actual, pero cada una eliminaría una limitación declarada.
+
+| # | Mejora | Qué resuelve | Método (fuente) | Tiempo estimado |
+|---|---|---|---|---|
+| 1 | Búsqueda amplia de hiperparámetros de la Bi-LSTM propia | La configuración se fundamenta con valores de fuentes y grillas chicas; una búsqueda podría mejorarla | Optuna (TPE), hasta 100 trials con corte tras 20 sin mejora (Khan), con el espacio de la sección 7 | ~6 h |
+| 2 | SOMA de la Propuesta A con los parámetros de Makri | A usa el óptimo que Makri obtuvo con sus datos, no con los nuestros | SOMA (población 6, *path length* 4, paso 0,11, espacio de 8 hiperparámetros), cortando cuando el líder no mejora en una migración completa (Makri, sec. 2.4.3, paso 6) | 10–20 h por variante (A1 y A2) |
+| 3 | Búsqueda de hiperparámetros de la Propuesta B | Ídem, con el óptimo de Khan | ATPE/TPE con el espacio de Khan (Tabla 10), incluidos q, R y α del Kalman; 100 trials con corte tras 20 sin mejora | ~8 h |
+| 4 | Búsqueda de hiperparámetros de la Propuesta C | Ídem, con el óptimo de Palan | Optuna con el espacio de Palan (Tabla 3), 20 trials | ~2–3 h |
+| 5 | Grilla de la Propuesta D | D usa la configuración fija de Duan y Palan | Grid search de Morcillo (Tabla 2), 24 combinaciones | ~0,5 h |
+| 6 | **Prueba de ventana de entrada para cada modelo del Benchmarking** | Hoy los modelos del Benchmarking usan 30 días (especificación, igual para todos) y solo la Bi-LSTM propia usa la ventana elegida por su prueba (sección 6.4). Ninguna fuente publica una ventana en días que se pueda trasladar | Grilla de 7, 14, 30, 60 y 90 días con el criterio de menor error, para cada modelo | ~1 h por modelo (~5 h en total) |
+
+Las mejoras 1 a 5 suman las **40–55 h de GPU** del camino 2 (sección 3); con la 6, unas 45–60 h.
 
 ---
 
