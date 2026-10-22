@@ -191,7 +191,7 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 2. **Grilla de α y β de ETS:** se puede reemplazar por una optimización continua.
 3. **Parámetros del VMD causal** (365 días de historia, 60 días de segmento mínimo, 1 modo descartado): hay que medir su efecto o buscar una fuente.
 4. **Umbrales de limpieza con respaldo parcial** (sección 6.2): interpolación de 3 días, tramos mínimos de 7 y 5 días, ventana de 7 días para saltos. Se cierran con pruebas cortas.
-5. **Ventana de entrada de 30 días** (sección 6.3): **hoy no tiene fundamento propio**, porque se tomó de la especificación. Se cierra con la grilla de 7, 14, 30, 60 y 90 días y la regla de un error estándar (sección 8).
+5. **Ventana de entrada de 30 días** (sección 6.3): **hoy no tiene fundamento propio**, porque se tomó de la especificación. Se cierra con la grilla de 7, 14, 30, 60 y 90 días, eligiendo la de menor error (sección 8). La prueba puede elegir otro valor.
 
 ---
 
@@ -258,7 +258,7 @@ La especificación (`docs/prompt_v1.md`) fija estos tres valores. Como eso solo 
 **Ventana de 30 días: sin fundamento propio por ahora. Estado: pendiente.**
 - **Cómo se eligió:** se tomó de la especificación original (`docs/prompt_v1.md`, L = 720 h = 30 días). **Ningún notebook de la PoC probó otra ventana ni aplicó un método para elegirla.**
 - **Lo único que se verificó** (en el análisis de esta documentación, no en un notebook): la autocorrelación media de los cambios diarios del voltaje (train) es −0,18 a 1 día y ~0 desde los 2 días. Eso indica que la dinámica de corto plazo dura 1 o 2 días y que no hace falta una ventana muy corta, pero **no justifica el valor 30**: una ventana más larga podría estimar mejor el nivel y la tendencia.
-- **Cómo se va a fundamentar** (prueba pendiente, sección 8): grilla de 7, 14, 30, 60 y 90 días en la validación cruzada de 3 bloques, con 3 semillas, eligiendo con la regla de un error estándar. Si la regla elige otro valor, se cambia la ventana de todos los modelos.
+- **Cómo se va a fundamentar** (prueba pendiente, sección 8): grilla de 7, 14, 30, 60 y 90 días en la validación cruzada de 3 bloques, con 3 semillas, eligiendo la ventana de menor error (criterio de las fuentes, sección 8). Si gana otro valor, se cambia la ventana de todos los modelos.
 
 ---
 
@@ -294,11 +294,14 @@ Costo estimado: ~6 h. Para los otros modelos, el camino 2 sería: A, SOMA con lo
 
 **Estado: ninguna se ejecutó todavía.** Se hacen con datos de train y **antes** de reentrenar, porque si alguna cambia un valor (por ejemplo 12 kA o una ventana de 60 días), cambian los datos de entrada de todos los modelos.
 
-**Regla para elegir un valor dentro de una grilla:** la **regla de un error estándar** (Breiman et al., 1984, *Classification and Regression Trees*; Hastie, Tibshirani y Friedman, *The Elements of Statistical Learning*, sec. 7.10):
-1. Se mide el error de cada valor de la grilla en la validación cruzada de 3 bloques, con 3 semillas, para estimar su variación.
-2. Se elige **el valor más simple** (ventana más corta, modelo más chico) **cuyo error esté dentro de un error estándar del mejor**.
+**Criterio para elegir un valor dentro de una grilla: el menor error, como en las fuentes.** Las 8 fuentes del Benchmarking eligen su configuración con el menor error de validación (Palan: "mejor pérdida de validación, minimizada en 20 trials", Tabla 3; Makri: menor MSE con SOMA; Khan: menor RMSE; Morcillo: mejor configuración de la grilla; Guan: MSE de validación como aptitud). Ninguna usa la regla de un error estándar, así que no se usa.
+1. Cada valor de la grilla se mide en la validación cruzada de 3 bloques, con 3 semillas.
+2. **Se elige el valor con menor error promedio.**
+3. Se informa el error estándar de cada valor. Si el ganador y el segundo quedan a menos de ese margen, se deja escrito que son equivalentes con estos datos (igual se elige el de menor error).
 
-La regla da un único valor y explica por qué, por ejemplo, se elige 30 y no 29: los valores fuera de la grilla no se prueban porque sus diferencias son menores que la variación entre semillas (±2 %), y entre los de la grilla gana el más simple que no es peor de forma medible. Se aplica a todas las grillas: ventana, ancla y embedding, cabezas de atención de B y ventana de detección de saltos.
+**La prueba elige el valor; no está pensada para confirmar el actual.** Si gana otro valor (por ejemplo, una ventana de 60 días), se cambia.
+
+**Diseño de las grillas (por qué no se prueban valores que difieren en una unidad, como 29 y 30 días):** la diferencia de error entre valores tan cercanos sería menor que la variación entre semillas (±2 %, notebook 06e), así que ninguna medición podría distinguirlos. Por eso los puntos de cada grilla están espaciados (por ejemplo 7, 14, 30, 60 y 90 días). Se aplica a todas las grillas: ventana, ancla y embedding, cabezas de atención de B y ventana de detección de saltos.
 
 | Prueba | Qué fundamenta | Tiempo |
 |---|---|---|
@@ -306,8 +309,8 @@ La regla da un único valor y explica por qué, por ejemplo, se elige 30 y no 29
 | Etiquetado fuera de servicio con tramos de 3, 5, 7 y 14 días | R5 (7 y 5 días) | minutos |
 | Ventana de detección de saltos de 3, 5, 7 y 14 días | R9 (7 días) | minutos |
 | Corte de paro en 10 y 12 kA | R4 | minutos |
-| Ventana de entrada de 7, 14, 30, 60 y 90 días (validación cruzada de 3 bloques, 3 semillas, regla de un error estándar). El VMD causal se calcula una sola vez con 90 días y las ventanas más cortas se toman de ahí | L | ~1 h |
-| Grilla ancla {3, 7, 14} × embedding {4, 8, 16} (regla de un error estándar) | Bi-LSTM | ~40 min |
+| Ventana de entrada de 7, 14, 30, 60 y 90 días (validación cruzada de 3 bloques, 3 semillas, menor error). El VMD causal se calcula una sola vez con 90 días y las ventanas más cortas se toman de ahí | L | ~1 h |
+| Grilla ancla {3, 7, 14} × embedding {4, 8, 16} (menor error) | Bi-LSTM | ~40 min |
 | Mediciones de lote y separación de orígenes (Bi-LSTM, B, C) | Lote, orígenes cada 5 y cada 10 días | ~20 min |
 | Cabezas de atención {1, 2, 4, 8} (opcional) | B | ~1 h |
 | ETS con α y β continuos (opcional) | ETS | minutos |
@@ -316,11 +319,14 @@ La regla da un único valor y explica por qué, por ejemplo, se elige 30 y no 29
 
 ## 9. Orden de trabajo (rama `feature/test`)
 
-1. Pruebas cortas de la sección 8 y actualización de este documento con sus resultados.
-2. Cambios de configuración y de código: BO-VMD de Makri, módulo espacial de Palan para C, Kalman de Khan para B, la configuración de la sección 4, y **quitar la v2 de la comparación** (notebook 07, ranking, README).
-3. Reconstruir Silver y Gold (notebooks 04, 05 y 05b) si cambian umbrales o el BO-VMD.
-4. Reentrenar todos los modelos (notebooks 06, 06b, 06c, 06d y 06e).
-5. Ejecutar de nuevo el notebook 07, una sola vez, y actualizar el README, `docs/metricas.md` y `docs/intentos_mejora.md`.
-6. Merge a `main`.
+El orden importa porque cada paso cambia los datos que usa el siguiente: las pruebas que usan la señal filtrada (ventana, ancla, saltos) tienen que hacerse con la señal VMD definitiva, es decir, después de aplicar el BO-VMD de Makri.
+
+1. **Pruebas de limpieza** (R3, R4 y R5): no dependen del VMD.
+2. **Aplicar la limpieza y el BO-VMD de Makri**, y reconstruir Silver y Gold (notebooks 04, 05 y 05b).
+3. **Pruebas que usan la señal filtrada:** ventana de entrada, ventana de detección de saltos (R9), ancla y embedding, mediciones de lote y, si se hace, cabezas de atención de B.
+4. **Cambios de configuración y de código de los modelos:** módulo espacial de Palan para C, Kalman de Khan para B, la configuración de la sección 4, y quitar la v2 de la comparación (notebook 07, ranking, README).
+5. **Reentrenar todos los modelos** (notebooks 06, 06b, 06c y 06d).
+6. **Ejecutar de nuevo el notebook 07, una sola vez**, y actualizar el README, `docs/metricas.md` y `docs/intentos_mejora.md`.
+7. Merge a `main`.
 
 **Tiempo estimado:** 3–4 h de cómputo, más ~1,5 h de pruebas cortas.
