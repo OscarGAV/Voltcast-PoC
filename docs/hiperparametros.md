@@ -295,6 +295,34 @@ La especificación (`docs/prompt_v1.md`) fija estos tres valores. Como eso solo 
 - **Lo único que se verificó** (en el análisis de esta documentación, no en un notebook): la autocorrelación media de los cambios diarios del voltaje (train) es −0,18 a 1 día y ~0 desde los 2 días. Eso indica que la dinámica de corto plazo dura 1 o 2 días y que no hace falta una ventana muy corta, pero **no justifica el valor 30**: una ventana más larga podría estimar mejor el nivel y la tendencia.
 - **Cómo se va a fundamentar** (prueba pendiente, sección 8): grilla de 7, 14, 30, 60 y 90 días en la validación cruzada de 3 bloques, con 3 semillas, eligiendo la ventana de menor error (criterio de las fuentes, sección 8). Si gana otro valor, se cambia la ventana de todos los modelos.
 
+### 6.4 Pruebas del paso 3 (señal filtrada)
+
+**Procedimiento común (fijado antes de ejecutar):**
+- **Datos:** reconstruidos desde Silver, con la limpieza definitiva (10 kA, 12 días) y el BO-VMD de Makri por celda.
+- **Modelo:** la Bi-LSTM con la arquitectura definitiva (Adam, ReLU, sin recorte de gradiente), 45 épocas fijas, semillas 42, 43 y 44, en los bloques F1, F2 y F3 de train.
+- **VMD:** modos de train no causales; modos de los bloques causales.
+- **Objetivos:** solo voltajes medidos, comunes a todas las variantes de cada etapa.
+- **Criterio:** menor RMSE (1–180 días), relativo a la referencia y promediado en los 3 bloques. Se informa el error estándar entre semillas.
+
+**Etapa 1: señal de entrada** (referencia: filtrada sin 1 modo, la configuración anterior)
+
+| Señal | RMSE relativo (± error estándar) |
+|---|---|
+| Filtrada sin 1 modo | 1,0000 |
+| Filtrada sin 2 modos | 1,0015 ± 0,0016 |
+| **Filtrada sin 3 modos** | **0,9979 ± 0,0013** |
+| Filtrada sin 4 modos | 0,9991 ± 0,0012 |
+| Filtrada sin 5 modos | 1,0029 ± 0,0013 |
+| Filtrada sin 6 modos | 1,0028 ± 0,0022 |
+| Sin filtrar | 1,0267 ± 0,0051 |
+| Modos VMD como entradas (como Makri) | 1,0702 ± 0,0059 |
+
+**Decisiones:**
+- **El filtrado VMD queda justificado** (A): sin filtro el error sube un 2,7 %, unas 5 veces el error estándar.
+- **Los modos como entradas**, que es lo que hace Makri, empeoran un 7 % en nuestro modelo, así que no se adoptan para la Bi-LSTM (sí se usan en la Propuesta A, como su fuente).
+- **`N_DROP = 3`**, el menor error. Es equivalente a 4 (diferencia del 0,12 %, menor que el error estándar). Descartar entre 1 y 6 modos cambia el error menos del 0,5 %.
+- La grilla se extendió de 3 a 6 modos porque el ganador inicial (3) estaba en el borde.
+
 ---
 
 ## 7. Espacio de búsqueda de la Bi-LSTM (camino 2, mejora posible)

@@ -19,7 +19,7 @@ from . import config
 TAU, DC, INIT, TOL = 0.0, 0, 1, 1e-6
 K_RANGE = (2, 15)  # Makri et al. (2026), sec. 3.2
 ALPHA_RANGE = (400.0, 2000.0)
-N_DROP = 1  # modos descartados al reconstruir una señal filtrada (pendiente: prueba de menor error)
+N_DROP = 3  # modos descartados al reconstruir la señal filtrada (prueba de menor error, docs/hiperparametros.md 6.4)
 
 
 # --------------------------------------------------------------------------- #
