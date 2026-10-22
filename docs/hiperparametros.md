@@ -228,6 +228,7 @@ El análisis exploratorio del notebook 03 justifica **por qué existe cada regla
 | **V > 5 V = atípico** (R6) | No hay ninguna medición en operación entre 4 y 5 V; el máximo normal es 3,77 V | **Justificado** |
 | **Salto de nivel ≥ 0,10 V** (R9) | Sin intervenciones, la diferencia entre las medianas de 7 días antes y después es < 0,037 V en el 99 % de los casos y < 0,059 V en el 99,5 %. Por encima de +0,10 V queda solo el 0,03 % | **Análisis exploratorio, no decisorio:** el argumento usa percentiles elegidos por criterio propio. Se decide junto con la ventana de 7 días en la prueba de menor error del paso 3 |
 | **Paro: kA < 10** (R4) | El voltaje de las celdas baja de forma lineal con la corriente, ~0,046 V por kA (R² = 0,95 en 138 días de 0,5 a 14 kA), y con ≤ 0,5 kA (apagado) se desploma ~2 V. Ejemplo: el 10-05-2022 el EL A operó con 10,5 kA y la mediana de sus celdas fue 0,18 V menor que la de los días vecinos (14,2 kA). Con el corte actual de 10 kA, ese día cuenta como válido | **Análisis exploratorio, no decisorio.** La comparación con días vecinos usaba criterios propios (percentil 99,5, ventana de ±7 días, referencia ≥ 14 kA). Se decide con la prueba de menor error (sección 8) entre 10 y 13,5 kA |
+| **Valores interpolados: solo como entrada** | Un valor interpolado es una recta trazada entre dos mediciones, no una medición | **Decisión:** se usan solo como entrada del modelo (ventanas sin agujeros). El entrenamiento (objetivos) y las métricas usan **solo voltajes medidos** (calidad `ok`), como pide `docs/metricas.md` ("contra el voltaje real") |
 | **Interpolar huecos de hasta 3 días** (R3) | Al ocultar valores conocidos de train e interpolarlos, el error es menor que el cambio medio de un día al siguiente (0,00258 V) hasta huecos de 12 días (0,00253 V), y lo supera desde 13 (0,00260 V). Pasar a 12 días agrega ~11 200 días-celda válidos (~2 %) | **Análisis exploratorio, no decisorio.** El criterio "no peor que el cambio diario" era propio. Se decide con la prueba de menor error (sección 8) entre 3 y 12 días. Pendiente: si los valores interpolados cuentan o no como objetivos y en las métricas |
 | **Fuera de servicio: tramo ≥ 7 días e interrupciones ≤ 5 días** (R5) | Con mínimos de 3, 5, 7 y 14 días y uniones de 3, 5 y 7 días, los días-celda válidos de train son **idénticos** (547 507; 0 de diferencia) | **Justificado (A): insensible.** El umbral solo cambia la etiqueta entre categorías que igual se descartan |
 | **Ventana de 7 días para detectar saltos** (R9) | No probado | **Pendiente.** Prueba: comparar 3, 5, 7 y 14 días |
@@ -376,7 +377,25 @@ Surgió de una revisión completa de `config.py`, de los módulos de `src/voltca
 | Varianza inicial del filtro (P0 = 1e-2 y 1e-6) y 10 observaciones de calentamiento (`BURN_IN`) | `kalman.py` | Sin fuente | **A:** reemplazar por la inicialización difusa estándar de los modelos de espacio de estados (libro de referencia, pendiente de cita), o probar que el resultado no cambia |
 | Punto de partida de la máxima verosimilitud (`x0`) | `kalman.fit_mle` | Solo es el punto inicial del optimizador | **Prueba:** verificar que distintos puntos de partida llegan a la misma solución |
 | Reiniciar el filtro en saltos y arranques al estimar | `kalman.py`, notebook 05b | Sin fuente | **Prueba:** comparar la verosimilitud y el error con y sin reinicio |
-| Decoder: entrada = salida anterior, estado inicial con Linear + tanh, cabezal con GELU | `model.Seq2SeqAttention` | Detalles no publicados por Gou ni por Khan | **F:** usar ReLU en el cabezal (Gou y Song); el resto se declara como detalle de implementación no publicado (sin fundamento) |
+| Decoder de B, detalle por detalle | `model.Seq2SeqAttention` | Gou et al. (2024) pronostica **un solo paso** (la hora siguiente), así que no describe un decoder que genere 180 días | Ver la tabla 10.4.1 |
+
+#### 10.4.1 Decoder de B
+
+| Detalle | Implementación actual | Fuente | Estado |
+|---|---|---|---|
+| Atención multi-cabeza (producto escalado y proyección de salida) | Sí | Gou, ecuaciones 12 y 13 | **F** |
+| Capa de salida sobre [estado del decoder, contexto de atención] | 2 capas con GELU | Gou, ecuación 14: una sola capa totalmente conectada | **F**, pasando a una sola capa |
+| Generación paso a paso de los 180 días | Sí | Benchmarking, Propuesta B ("decodificación paso a paso") | **F** |
+| Decoder unidireccional (LSTM) | Sí | Gou usa un decoder BiLSTM porque recorre la historia ya observada de cada región para dar un solo valor; un decoder que genera el futuro paso a paso no puede recorrer hacia atrás valores que todavía no generó | **A** (la bidireccionalidad se mantiene en el encoder, que recorre la historia, como en Gou) |
+| Estado inicial del decoder desde el encoder, con una capa lineal y tanh | Sí | Cho et al. (2014), EMNLP, apéndice A.1.1: h′₀ = tanh(V′c); Sutskever, Vinyals y Le (2014), NeurIPS: el estado inicial del decoder es el último estado del encoder | **F** (fuente externa al Benchmarking) |
+| Embedding de celda e indicador de electrolizador en el estado inicial | Sí | — | **A:** da a B las mismas condiciones que a nuestro modelo, que comparte pesos entre las 300 celdas |
+| Entrada de cada paso: el valor del paso anterior | Sí | Sutskever et al. (2014), ec. 1: cada salida se condiciona en las salidas anteriores | **F** (fuente externa) |
+| Entrada del primer paso: el último voltaje observado (relativo al ancla) | Sí | Sutskever usa un símbolo de inicio, porque trabaja con palabras | **A:** en una serie numérica, el análogo es el último valor observado |
+| Consulta (query) de la atención: el estado del decoder del paso anterior | Sí | Bahdanau, Cho y Bengio (2015), ICLR, ec. 6: eᵢⱼ = a(sᵢ₋₁, hⱼ) | **F** (fuente externa) |
+| Entrenamiento con las propias predicciones (sin *teacher forcing*) | Sí | En Sutskever y Cho, el entrenamiento se condiciona en los valores reales anteriores (*teacher forcing*) | **Prueba** de menor error (con y sin *teacher forcing*), junto con la de cabezas de atención |
+| Número de cabezas de atención | 4 | No lo publica ninguna fuente | **Prueba** {1, 2, 4, 8} |
+
+**Sobre las fuentes externas:** Sutskever et al. (NeurIPS 2014, >17 000 citas en OpenAlex), Cho et al. (EMNLP 2014, >25 000) y Bahdanau et al. (ICLR 2015, >16 000) son los artículos que definieron la arquitectura codificador-decodificador y el mecanismo de atención; los tres se verificaron en su texto completo (arXiv 1409.3215, 1406.1078 y 1409.0473). Tratan de traducción automática, así que se citan **solo para convenciones de arquitectura**, no para afirmar nada sobre el rendimiento en pronóstico.
 
 ### 10.5 Propuesta D (TCN)
 

@@ -1,7 +1,7 @@
 
 ## Criterios de evaluación del modelo
 
-Todas las métricas se calculan **en voltios por celda**, desnormalizando cada modelo y comparando contra el **voltaje real sin filtrar** del período de validación (fuera de muestra), solo en fechas con dato válido. Se reportan sobre el horizonte completo (1–180 días) y en los cortes de **60 y 180 días**.
+Todas las métricas se calculan **en voltios por celda**, desnormalizando cada modelo y comparando contra el **voltaje real sin filtrar** del período de validación (fuera de muestra), solo en fechas con voltaje **medido** (calidad `ok`): los valores interpolados se usan como entrada del modelo, pero no como objetivo ni en las métricas (`docs/hiperparametros.md`, sección 6.2). Se reportan sobre el horizonte completo (1–180 días) y en los cortes de **60 y 180 días**.
 
 ### 1. Requisito de la documentación del proyecto (OB2 – Diseño de Arquitectura, Tabla 10 y RNF-06)
 
