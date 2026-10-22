@@ -99,7 +99,7 @@ SEQ2SEQ = {
 }
 ENSEMBLE_SEEDS = [42, 43, 44]
 PROPIO_SEEDS = [42, 43, 44, 45, 46]  # ensamble de semillas de la Bi-LSTM v2 (notebook 06e)
-FUSION_ALPHAS = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]  # ensamble red + Kalman (Khan et al., 2026)
+FUSION_ALPHAS = [round(0.30 + 0.01 * i, 2) for i in range(41)]  # α ∈ [0,3; 0,7] con paso 0,01 (Khan et al., 2026, ec. 16)
 
 # Propuesta A tal cual el Benchmarking: MIMO + SOMA + RFR-SHAP + Min-Max
 MIMO_TRAIN = {"arch": "mimo", "dropout": 0.2, "weight_decay": 1e-4, "clip": None, "batch_size": 32, "stride": 1,

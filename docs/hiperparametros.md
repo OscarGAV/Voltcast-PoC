@@ -144,9 +144,12 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 | LR / dropout / regularización | 1e-3 / 0,2 / 1e-4 | Igual: Khan (Tabla 7) | F |
 | Paciencia / máximo de épocas | 6 / 40 | 20 / 200: Khan | F |
 | Ensamble de 3 semillas | 3 | Se elimina: Khan entrena un solo modelo | F |
-| Kalman: estado | nivel y pendiente | nivel, velocidad y aceleración: Khan | F |
-| Kalman: q y R | máxima verosimilitud | Igual. **Pendiente:** citar un libro de referencia de modelos de espacio de estados (Khan las ajusta con ATPE) | A (pendiente de cita) |
-| α de fusión | grilla 0,30–0,70 | Igual: rango de Khan (Tabla 10) | F |
+| Kalman: estado y matriz de transición | nivel y pendiente | **Aplicado:** nivel, velocidad y aceleración, con A = [[1, 1, 0,5], [0, 1, 1], [0, 0, 1]] y Q = q·I (Khan, sec. 3.6) | F |
+| Kalman: corrección con observaciones | — | Sobre la historia hasta t0, como Khan | F |
+| Kalman: pronóstico de 180 días | nivel + pendiente·h | **Aplicado:** se proyecta A sin corregir (nivel + velocidad·h + ½·aceleración·h²). Khan pronostica un paso y corrige con la observación de ese paso; para los días futuros no hay observaciones | A |
+| Kalman: entrada de control (predicción de la red) | — | **Se omite:** con B = [1, 0, 0] y sin observaciones que corrijan, sumaría cada día la predicción completa al nivel (Khan, ec. 12). Riesgo declarado: proyectar la aceleración 180 días puede dar valores extremos; el peso α lo atenúa | A |
+| Kalman: q y R | máxima verosimilitud de 3 varianzas | Máxima verosimilitud de q (con Q = q·I, como Khan) y r. Los valores de Khan (Tabla 8) no se pueden adoptar porque están en kWh². **Pendiente:** citar un libro de referencia de modelos de espacio de estados | A (pendiente de cita) |
+| α de fusión | grilla 0,30–0,70 con paso 0,05 | **Aplicado:** paso 0,01 en [0,3; 0,7], elegido en la validación interna, como Khan ("grid search, step 0.01", sec. 3.6) | F |
 | Lote | 512 | Igual, justificado con una medición de memoria de GPU (decoder de 180 pasos) | A (medición) |
 | Orígenes de train cada 10 días | 10 | Igual, justificado con una medición de tiempo por época | A (medición) |
 | Embedding de celda | 8 | El valor que elija la grilla de nuestra Bi-LSTM, para mantener las mismas condiciones | A |
