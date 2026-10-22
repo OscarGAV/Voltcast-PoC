@@ -140,7 +140,7 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 | Parámetro | Inicial | Cómo queda | Marca |
 |---|---|---|---|
 | Unidades del encoder / decoder | 64 / 128 | 32 / 64: Gou et al. (2024), la fuente de la arquitectura Seq2Seq con atención que cita Khan | F |
-| Capas densas | — | 256 / 128: Khan (Tabla 7) | F |
+| Capas densas | — | **No se agregan.** Las capas densas de 256 y 128 de Khan (Tabla 7) son de su BiLSTM independiente, que B no usa; la red de B es la Seq2Seq de Gou, que da el pronóstico por una sola capa totalmente conectada ("output through the fully connected layer", ec. 14) | F |
 | LR / dropout / regularización | 1e-3 / 0,2 / 1e-4 | Igual: Khan (Tabla 7) | F |
 | Paciencia / máximo de épocas | 6 / 40 | 20 / 200: Khan | F |
 | Ensamble de 3 semillas | 3 | Se elimina: Khan entrena un solo modelo | F |
@@ -153,18 +153,18 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 | Lote | 512 | Igual, justificado con una medición de memoria de GPU (decoder de 180 pasos) | A (medición) |
 | Orígenes de train cada 10 días | 10 | Igual, justificado con una medición de tiempo por época | A (medición) |
 | Embedding de celda | 8 | El valor que elija la grilla de nuestra Bi-LSTM, para mantener las mismas condiciones | A |
-| Cabezas de atención | 4 | Ni Khan, ni Song, ni Gou publican el número | **Sin fundamento**, o Prueba con {1, 2, 4, 8} (~1 h) |
+| Cabezas de atención | 4 | Ni Khan, ni Song, ni Gou publican el número | **Prueba** {1, 2, 4, 8}, junto con *teacher forcing* (sección 10.4.1). El código ya admite las dos opciones (`SEQ2SEQ["heads"]`, `SEQ2SEQ["teacher_forcing"]`) |
 
 ### 4.4 Propuesta C (Palan)
 
 | Parámetro | Inicial | Cómo queda | Marca |
 |---|---|---|---|
-| Módulo espacial | GCN sobre un grafo de celdas | GRU espacial que recorre las variables de cada día (las 150 celdas y la corriente en kA) y luego una GRU temporal, como describe Palan | F |
+| Módulo espacial | GCN sobre un grafo de celdas | **Aplicado:** GRU espacial que recorre las variables de cada día (las 150 celdas y la corriente en kA) y luego una GRU temporal; su último estado pasa por ReLU y una capa densa, como describe Palan. Un modelo por electrolizador, igual que D | F |
 | Vecinas y celdas correlacionadas del grafo | 2 + 4 | Se eliminan junto con el grafo | — |
-| Unidades / capas / LR / épocas | 64 / 1 / 1e-3 / early stopping | 512 / 2 / 7,69e-4 / 90 (Tabla 3) | F |
+| Unidades / capas / LR / épocas | 64 / 1 / 1e-3 / early stopping | 512 / 2 / 7,69e-4 / 90 (Tabla 3; Tabla 4: 512 unidades y 2 capas para las dos GRU). Palan usa early stopping ("stops training when improvement is not being made within a specified patience period") sin publicar la paciencia: hasta 90 épocas con paciencia 20, la de Khan y Song, como en D | F (paciencia: A) |
 | Dropout | 0,2 | Igual (Tabla 3) | F |
-| Weight decay | 1e-4 | 0,01, el valor por defecto de AdamW en PyTorch (Palan usa weight decay sin publicar el valor) | A |
-| Lote | 16 | Palan no lo publica: se justifica con una medición de memoria de GPU | A (medición) |
+| Weight decay | 1e-4 | **1e-4.** Palan usa "Adam incorporating weight decay" sin publicar el valor. 1e-4 es la L2 de Khan (Tabla 7) y el máximo del rango que Palan busca para su BiLSTM-SSA ([1e-7, 1e-4], Tabla 4). (La versión anterior de este documento proponía 0,01, el valor por defecto de AdamW; no aplica, porque se usa Adam, cuyo valor por defecto es 0) | A |
+| Lote | 16 | **64: Palan sí lo publica** ("DataLoaders take groups of 64 sequences"). Con 64 la red necesita 12,8 GB de GPU (medido; la GPU tiene 8 GB), así que cada lote se procesa en 4 partes de 16 y se acumulan los gradientes, ponderados por los objetivos de cada parte: el gradiente es el del lote de 64 (verificado con una prueba en `model.run_epoch`) y el pico de memoria baja a 3,3 GB | F (acumulación: A, medición) |
 
 ### 4.5 Propuesta D (Duan, Palan)
 
@@ -174,7 +174,7 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 | Bloques | 5 (dilataciones 1, 2, 4, 8, 16) | 4: Palan (Tabla 4). Con kernel 3 cubren 61 días, más que la ventana de 30 | F |
 | LR / lote | 1e-3 / 32 | Igual: Duan | F |
 | Weight decay / recorte de gradiente | 1e-4 / 1,0 | Se eliminan: ninguna de las dos fuentes los usa | F |
-| Épocas | early stopping (80, 10) | Early stopping con paciencia 20 (Khan). Las épocas de Duan (20 + 50 de ajuste fino) son de transferencia de aprendizaje, que aquí no se aplica | A |
+| Épocas | early stopping (80, 10) | Early stopping con paciencia 20 y máximo de 200 épocas (Khan). Las épocas de Duan (20 + 50 de ajuste fino) son de transferencia de aprendizaje, que aquí no se aplica | A |
 | Búsqueda | ninguna | Ninguna: Duan no hace búsqueda. La grilla de Morcillo queda como mejora posible (camino 2) | F |
 
 ### 4.6 Métodos de referencia (baselines)
@@ -486,15 +486,19 @@ Surgió de una revisión completa de `config.py`, de los módulos de `src/voltca
 |---|---|---|---|
 | BO-VMD sobre una muestra de 20 celdas estratificada (`BO_SAMPLE_CELLS`) y regla para usar un par común de K y α (`choose_params`: diferencia de K ≤ 1, razón de α ≤ 2) | `config.py`, `vmd.py`, notebook 05 | Elegidos sin fuente | **F:** Makri aplica BO-VMD a **cada serie que pronostica**. Aplicarlo a cada una de las 300 celdas (~50 min en paralelo) elimina la muestra y la regla de homogeneidad |
 | Parámetros internos del VMD: τ = 0, DC = 0, init = 1, tolerancia 1e-7 | `vmd.py` | Sin cita | **F / pendiente de cita:** la documentación de `vmdpy` recomienda τ = 0 ("para tolerar ruido") e indica una tolerancia "típicamente alrededor de 1e-6". Usar 1e-6 o citar el ejemplo oficial de la biblioteca |
-| Random Forest de RFR-SHAP: 300 árboles, profundidad 8, mínimo 20 por hoja, 2000 muestras para SHAP | `features.rfr_shap` | Makri publica 100 árboles (sec. 3.3) y no los demás parámetros | **F:** 100 árboles (Makri); los demás, los valores por defecto de scikit-learn, que es la biblioteca que usa Makri (A) |
+| Random Forest de RFR-SHAP: 300 árboles, profundidad 8, mínimo 20 por hoja, 2000 muestras para SHAP | `features.rfr_shap` | Makri publica 100 árboles (sec. 3.3) y no los demás parámetros | **Aplicado. F:** 100 árboles (Makri); los demás, los valores por defecto de scikit-learn, que es la biblioteca que usa Makri (A) |
+| Candidatas y variable objetivo de RFR-SHAP | notebook 06c | Makri ordena cada variable por separado (corrientes, voltajes, modos) y elige las 12 más importantes para predecir la serie | **A:** candidatas = los 15 tipos de modo de la celda, kA, el voltaje medio por celda y el calendario (seno y coseno del día del año y de la semana), 21 en total, con las celdas juntas; objetivo = el voltaje medido del día siguiente a partir de las variables del día (el análogo del pronóstico). La entrada del MIMO son los modos elegidos de cada celda y las covariables elegidas |
+| Filas del Random Forest (14 544 pares celda-día al azar) | notebook 06c | Con los valores por defecto los árboles crecen sin límite y el costo de SHAP crece con las hojas: con ~64 000 filas, 100 muestras no terminaron en 10 minutos (medido) | **A (medición):** el tamaño del dataset de Makri (101 días cada 10 minutos, sec. 3.1) |
+| Muestras para SHAP (1000) | `features.rfr_shap` | Makri no lo publica | **A (medición):** el notebook 06c verifica que el top-12 es el mismo con 250 y con 500 muestras; si cambiara, se informa |
 
 ### 10.4 Propuesta B (Kalman y Seq2Seq)
 
 | Valor | Dónde | Situación | Cómo fundamentarlo |
 |---|---|---|---|
 | Varianza inicial del filtro (P0 = 1e-2 y 1e-6) y 10 observaciones de calentamiento (`BURN_IN`) | `kalman.py` | Sin fuente | **A:** reemplazar por la inicialización difusa estándar de los modelos de espacio de estados (libro de referencia, pendiente de cita), o probar que el resultado no cambia |
-| Punto de partida de la máxima verosimilitud (`x0`) | `kalman.fit_mle` | Solo es el punto inicial del optimizador | **Prueba:** verificar que distintos puntos de partida llegan a la misma solución |
-| Reiniciar el filtro en saltos y arranques al estimar | `kalman.py`, notebook 05b | Sin fuente | **Prueba:** comparar la verosimilitud y el error con y sin reinicio |
+| Punto de partida de la máxima verosimilitud (`x0`) | `kalman.fit_mle` | Solo es el punto inicial del optimizador | **Prueba (en el notebook 05b):** la estimación conjunta se repite desde tres puntos de partida y se usa la de mayor verosimilitud; el notebook informa la diferencia |
+| Reiniciar el filtro en saltos y arranques al estimar | `kalman.py`, notebook 05b | Sin fuente | **Prueba (en el notebook 05b):** estimación con y sin reinicios. Los saltos se detectan con el umbral de diagnóstico de R9 (0,10 V), porque el reinicio, como el diagnóstico, busca separar intervenciones |
+| Observaciones del Kalman | notebook 05b | — | **A:** solo voltajes medidos (sin los interpolados de Silver): el filtro predice sin corregir en los días sin dato, que es su forma estándar de tratar huecos. La estimación usa las 300 celdas (ya no hay muestra BO) |
 | Decoder de B, detalle por detalle | `model.Seq2SeqAttention` | Gou et al. (2024) pronostica **un solo paso** (la hora siguiente), así que no describe un decoder que genere 180 días | Ver la tabla 10.4.1 |
 
 #### 10.4.1 Decoder de B
@@ -519,8 +523,9 @@ Surgió de una revisión completa de `config.py`, de los módulos de `src/voltca
 
 | Valor | Dónde | Situación | Cómo fundamentarlo |
 |---|---|---|---|
-| Convolución inicial de suavizado con kernel 5 | `model.TCNMultiOutput` | Sin fuente | **F:** eliminarla; ni Duan ni Palan la usan |
-| Bloque residual con 2 convoluciones causales y ReLU | `model.TCNBlock` | Duan describe bloques residuales con convoluciones causales dilatadas y cita el TCN original (su ref. 36) | **F / pendiente de cita:** verificar la ref. 36 de Duan y citarla |
+| Convolución inicial de suavizado con kernel 5 | `model.TCNMultiOutput` | Sin fuente | **Aplicado. F:** se elimina; ni Duan ni Palan la usan |
+| Bloque residual con 2 convoluciones causales y ReLU | `model.TCNBlock` | Verificado: Duan (sec. de métodos, Fig. 7c) dice que "a residual block in TCN consists of two layers of dilated causal convolutions" y cita a Lea et al. (2017, CVPR; su ref. 36) | **F** (Duan) |
+| Convolución 1×1 en la conexión residual del primer bloque | `model.TCNBlock` | Al quitar la convolución de suavizado, el primer bloque pasa de 151 canales (celdas + kA) a 64 y la suma residual necesita igualar los canales | **F (fuente externa):** Bai, Kolter y Koltun (2018), el TCN genérico (arXiv 1803.01271), usan una convolución 1×1 cuando cambian los canales; Duan lo cita (su ref. 37) |
 
 ### 10.6 Evaluación y criterios
 
