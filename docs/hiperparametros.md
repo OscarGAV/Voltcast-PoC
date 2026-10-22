@@ -323,6 +323,36 @@ La especificación (`docs/prompt_v1.md`) fija estos tres valores. Como eso solo 
 - **`N_DROP = 3`**, el menor error. Es equivalente a 4 (diferencia del 0,12 %, menor que el error estándar). Descartar entre 1 y 6 modos cambia el error menos del 0,5 %.
 - La grilla se extendió de 3 a 6 modos porque el ganador inicial (3) estaba en el borde.
 
+**Etapa 2: ventana de entrada y ancla** (señal filtrada sin 3 modos)
+
+Primero se probó la ventana con el ancla actual (7 días); después, como la ventana y el ancla dependen entre sí (el ancla promedia los últimos días de la ventana), una grilla conjunta, y por último la extensión del ancla, porque el ganador quedó en el borde.
+
+| Ventana / ancla | RMSE relativo a 7 / 7 (± error estándar) |
+|---|---|
+| 90 / 7 | 1,0299 (frente a 30 / 7) |
+| 60 / 7 | 1,0159 (frente a 30 / 7) |
+| 30 / 7 (configuración anterior) | 1,0034 |
+| 14 / 14 | 1,0066 ± 0,0033 |
+| 14 / 3 | 1,0069 ± 0,0053 |
+| 14 / 7 | 1,0019 ± 0,0014 |
+| 7 / 7 | 1,0000 |
+| 7 / 3 | 0,9982 ± 0,0042 |
+| **5 / 3** | **0,9969 ± 0,0037** |
+| 5 / 2 | 1,0029 (frente a 7 / 7) |
+| 5 / 1 | 1,0035 (frente a 7 / 7) |
+| 3 / 3 | 1,0141 ± 0,0055 |
+
+(La fila 30 / 7 se calculó frente a 7 / 7 a partir de las dos comparaciones con objetivos comunes; las de 60 y 90 días son frente a 30 / 7.)
+
+**Decisiones:**
+- **Ventana de 5 días y ancla de 3 días** para la Bi-LSTM propia: el menor error.
+- **Con estos datos, 5 / 3 es equivalente a 7 / 3 y a 7 / 7**: las diferencias quedan dentro del error estándar.
+- **Las ventanas largas empeoran** (60 días: +1,6 %; 90 días: +3,0 %). Es coherente con la autocorrelación de los cambios diarios, que es ~0 desde los 2 días.
+- **El ancla de 3 días es interior**: 1 y 2 días empeoran, igual que 7 y 14.
+- **Los modelos del Benchmarking mantienen 30 días** (decisión de la sección 6.3); probar su ventana queda como mejora (sección 11, #6).
+
+**Limitación del banco de pruebas:** todas las configuraciones se entrenan 45 épocas fijas (las que eligió el early stopping de la configuración anterior). Una configuración podría necesitar más o menos épocas; en el entrenamiento final, las épocas se eligen con early stopping (paciencia 20).
+
 ---
 
 ## 7. Espacio de búsqueda de la Bi-LSTM (camino 2, mejora posible)
