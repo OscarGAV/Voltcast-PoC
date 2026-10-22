@@ -226,10 +226,10 @@ El análisis exploratorio del notebook 03 justifica **por qué existe cada regla
 |---|---|---|
 | **V < 0,5 V con kA normal = fuera de servicio** (R5) | En operación **no hay ninguna** medición entre 0,5 y 2,5 V. El voltaje normal va de 2,86 a 3,77 V (percentiles 0,01 % y 99,99 %) | **Justificado.** Cualquier corte entre 0,5 y 2,5 V da el mismo resultado |
 | **V > 5 V = atípico** (R6) | No hay ninguna medición en operación entre 4 y 5 V; el máximo normal es 3,77 V | **Justificado** |
-| **Salto de nivel ≥ 0,10 V** (R9) | Sin intervenciones, la diferencia entre las medianas de 7 días antes y después es < 0,037 V en el 99 % de los casos y < 0,059 V en el 99,5 %. Por encima de +0,10 V queda solo el 0,03 % | **Justificado:** casi 3 veces la variación normal |
-| **Paro: kA < 10** (R4) | Operación normal entre 12 y 16 kA (voltaje medio 3,12–3,18 V). Con 5–10 kA (78 días) el voltaje cae a 2,85 V, unos 3 desvíos por debajo. Entre 10 y 12 kA hay 3 días con 2,96 V, que también parecen anómalos | **Justificado, con un ajuste propuesto:** subir el corte a **12 kA**, que afecta solo a esos 3 días |
-| **Interpolar huecos de hasta 3 días** (R3) | El 83 % de los huecos dura ≤ 3 días (718 de 915 duran 1 día), pero no hay un corte natural en 3 | **Parcial.** Prueba: ocultar valores conocidos, interpolarlos y medir desde qué largo de hueco el error supera la variación diaria |
-| **Fuera de servicio: tramo ≥ 7 días e interrupciones ≤ 5 días** (R5) | Los tramos con V < 0,5 V tienen todas las duraciones, sin un corte claro en 7 | **Parcial.** Los tramos más cortos igual se descartan como atípicos o huecos, así que el umbral cambia la etiqueta pero no los datos que ve el modelo. Prueba: verificarlo |
+| **Salto de nivel ≥ 0,10 V** (R9) | Sin intervenciones, la diferencia entre las medianas de 7 días antes y después es < 0,037 V en el 99 % de los casos y < 0,059 V en el 99,5 %. Por encima de +0,10 V queda solo el 0,03 % | **Análisis exploratorio, no decisorio:** el argumento usa percentiles elegidos por criterio propio. Se decide junto con la ventana de 7 días en la prueba de menor error del paso 3 |
+| **Paro: kA < 10** (R4) | El voltaje de las celdas baja de forma lineal con la corriente, ~0,046 V por kA (R² = 0,95 en 138 días de 0,5 a 14 kA), y con ≤ 0,5 kA (apagado) se desploma ~2 V. Ejemplo: el 10-05-2022 el EL A operó con 10,5 kA y la mediana de sus celdas fue 0,18 V menor que la de los días vecinos (14,2 kA). Con el corte actual de 10 kA, ese día cuenta como válido | **Análisis exploratorio, no decisorio.** La comparación con días vecinos usaba criterios propios (percentil 99,5, ventana de ±7 días, referencia ≥ 14 kA). Se decide con la prueba de menor error (sección 8) entre 10 y 13,5 kA |
+| **Interpolar huecos de hasta 3 días** (R3) | Al ocultar valores conocidos de train e interpolarlos, el error es menor que el cambio medio de un día al siguiente (0,00258 V) hasta huecos de 12 días (0,00253 V), y lo supera desde 13 (0,00260 V). Pasar a 12 días agrega ~11 200 días-celda válidos (~2 %) | **Análisis exploratorio, no decisorio.** El criterio "no peor que el cambio diario" era propio. Se decide con la prueba de menor error (sección 8) entre 3 y 12 días. Pendiente: si los valores interpolados cuentan o no como objetivos y en las métricas |
+| **Fuera de servicio: tramo ≥ 7 días e interrupciones ≤ 5 días** (R5) | Con mínimos de 3, 5, 7 y 14 días y uniones de 3, 5 y 7 días, los días-celda válidos de train son **idénticos** (547 507; 0 de diferencia) | **Justificado (A): insensible.** El umbral solo cambia la etiqueta entre categorías que igual se descartan |
 | **Ventana de 7 días para detectar saltos** (R9) | No probado | **Pendiente.** Prueba: comparar 3, 5, 7 y 14 días |
 
 ### 6.3 Ventana de 30 días, horizonte de 180 días y split 80/20
@@ -305,10 +305,10 @@ Costo estimado: ~6 h. Para los otros modelos, el camino 2 sería: A, SOMA con lo
 
 | Prueba | Qué fundamenta | Tiempo |
 |---|---|---|
-| Interpolación: ocultar valores y medir el error según el largo del hueco | R3 (3 días) | minutos |
-| Etiquetado fuera de servicio con tramos de 3, 5, 7 y 14 días | R5 (7 y 5 días) | minutos |
-| Ventana de detección de saltos de 3, 5, 7 y 14 días | R9 (7 días) | minutos |
-| Corte de paro en 10 y 12 kA | R4 | minutos |
+| **Hecha:** etiquetado fuera de servicio con tramos de 3, 5, 7 y 14 días | R5 (7 y 5 días): insensible | — |
+| **Hecha (exploratoria):** interpolación con huecos de 1 a 14 días y relación voltaje–corriente | R3 y R4: definen las variantes a probar | — |
+| Paro (10 o 13,5 kA) × interpolación (3 o 12 días): reconstruir Silver y Gold con cada variante, entrenar la Bi-LSTM en la CV de 3 bloques con 3 semillas y **evaluar todas sobre el mismo conjunto de días** (voltajes medidos con corriente ≥ 13,5 kA, válidos en todas), eligiendo la de menor error | R3 y R4 | ~2 h |
+| Umbral (0,05, 0,10, 0,15 V) × ventana (3, 5, 7, 14 días) de detección de saltos, con el mismo procedimiento (afecta la máscara de saltos del entrenamiento) | R9 | ~1 h |
 | Ventana de entrada de 7, 14, 30, 60 y 90 días (validación cruzada de 3 bloques, 3 semillas, menor error). El VMD causal se calcula una sola vez con 90 días y las ventanas más cortas se toman de ahí | L | ~1 h |
 | Grilla ancla {3, 7, 14} × embedding {4, 8, 16} (menor error) | Bi-LSTM | ~40 min |
 | Mediciones de lote y separación de orígenes (Bi-LSTM, B, C) | Lote, orígenes cada 5 y cada 10 días | ~20 min |
@@ -329,4 +329,67 @@ El orden importa porque cada paso cambia los datos que usa el siguiente: las pru
 6. **Ejecutar de nuevo el notebook 07, una sola vez**, y actualizar el README, `docs/metricas.md` y `docs/intentos_mejora.md`.
 7. Merge a `main`.
 
-**Tiempo estimado:** 3–4 h de cómputo, más ~1,5 h de pruebas cortas.
+**Tiempo estimado:** se actualiza al cerrar el inventario de la sección 10 (las pruebas de limpieza con el criterio de menor error suman ~2 h).
+
+---
+
+## 10. Inventario de valores que no estaban mapeados
+
+Surgió de una revisión completa de `config.py`, de los módulos de `src/voltcast/` y de los números escritos a mano en los notebooks. Cada fila indica dónde está el valor, por qué hoy no tiene justificación y cómo se propone fundamentarlo.
+
+### 10.1 Datos y evaluación (afectan a todos los modelos)
+
+| Valor | Dónde | Situación | Cómo fundamentarlo |
+|---|---|---|---|
+| Orígenes de evaluación cada 7 días (`EVAL_STRIDE`) | `config.py`; validación, bloque interno, CV y ETS | Elegido sin medición | **Prueba:** comparar las métricas con orígenes cada 1 y cada 7 días en los modelos que no necesitan VMD (persistencia, tendencia, ETS). Si no cambian, se justifica por costo: con 1 día, el VMD causal pasa de ~21 000 a ~146 000 descomposiciones (A) |
+| Cortes de 60 y 180 días (`EVAL_HORIZONS`) | `config.py` | Vienen de la especificación | **F:** son los extremos del rango de 60–180 días que pide la especificación (`docs/prompt_v1.md`); 180 días está justificado en la sección 6.3 |
+| 181 celdas físicas por electrolizador (`N_CELDAS_FISICAS`) | `config.py` | Dato de planta | **A:** el notebook 03 (sección 6) muestra que `[Volts]` corresponde a 181 celdas (≈ 3,4 V por cada una de las 31 que no están en el Excel). Hay que corregir el Benchmarking, que dice 183 |
+| Recorte de covariables a \|z\| ≤ 5 (`COV_CLIP`) | `config.py`, Gold | Elegido sin medición | **Prueba:** contar cuántos valores superan \|z\| = 5. Si son pocos o ninguno, el valor no influye (A). Si no, decidirlo por menor error |
+| Regla de "día informativo" para fuera de servicio (kA normal y dato en la mayoría de las celdas) | `cleaning.out_of_service_mask` | Elegida sin medición | **Prueba:** verificar, como con R5, que cambiar la regla no modifica los datos válidos |
+| Con duplicados, conservar el último registro del día | `cleaning.daily_wide` (R2) | Respaldo cualitativo (notebook 03, sección 1) | **Prueba:** contar los días duplicados y comparar el primer y el último registro. Si la diferencia es menor que la variación diaria, no influye (A) |
+| Reentrenar con todo train tras el early stopping (`REFIT_FULL_TRAIN`) | `config.py`, notebooks 06 y 06b–06d | Elegido sin medición | **Prueba** de menor error en la CV de 3 bloques: con y sin reentrenamiento |
+| Semillas: 1 por modelo (42) | `config.py` | El valor de la semilla no necesita justificación; la cantidad sí | **F:** las fuentes entrenan un solo modelo. Se informa la variación entre semillas medida en el notebook 06e (±2 %) |
+
+### 10.2 Modelo propio (Bi-LSTM y Bi-NOA-LSTM)
+
+| Valor | Dónde | Situación | Cómo fundamentarlo |
+|---|---|---|---|
+| Objetivo relativo al ancla y escalado por σ_Δ | `dataset.build_inputs` | Contribución propia; el respaldo es indirecto (el notebook 07, sección 5.1, muestra el sesgo de nivel de los modelos con voltaje absoluto) | **Prueba:** ablación en la CV de 3 bloques (relativo al ancla frente a voltaje absoluto) |
+| Entradas: kA, V_total / celdas en servicio, canal de máscara | `dataset.FEATURES` | kA y V_total tienen respaldo cualitativo (notebook 03, sección 6); el canal de máscara no tiene ninguno | **Prueba:** ablación en la CV (con y sin cada entrada) |
+| Indicador de electrolizador en el cabezal | `model.VoltCastNet` | Sin justificación | **Prueba:** ablación en la CV |
+| Activación GELU del cabezal | `model.VoltCastNet` | Sin fuente | **F:** usar ReLU, como Song (capa densa con ReLU) y Gou |
+| Optimizador AdamW | `model.fit` (todos los modelos) | Las fuentes usan Adam | **F:** usar Adam, con la regularización L2 como `weight_decay` (equivale a la L2 de Khan) |
+| Pérdida MSE enmascarada | `model.masked_mse` | — | **F:** MSE como en Makri y Khan; la máscara excluye objetivos sin dato válido |
+
+### 10.3 Propuesta A (BO-VMD, RFR-SHAP)
+
+| Valor | Dónde | Situación | Cómo fundamentarlo |
+|---|---|---|---|
+| BO-VMD sobre una muestra de 20 celdas estratificada (`BO_SAMPLE_CELLS`) y regla para usar un par común de K y α (`choose_params`: diferencia de K ≤ 1, razón de α ≤ 2) | `config.py`, `vmd.py`, notebook 05 | Elegidos sin fuente | **F:** Makri aplica BO-VMD a **cada serie que pronostica**. Aplicarlo a cada una de las 300 celdas (~50 min en paralelo) elimina la muestra y la regla de homogeneidad |
+| Parámetros internos del VMD: τ = 0, DC = 0, init = 1, tolerancia 1e-7 | `vmd.py` | Sin cita | **F / pendiente de cita:** la documentación de `vmdpy` recomienda τ = 0 ("para tolerar ruido") e indica una tolerancia "típicamente alrededor de 1e-6". Usar 1e-6 o citar el ejemplo oficial de la biblioteca |
+| Random Forest de RFR-SHAP: 300 árboles, profundidad 8, mínimo 20 por hoja, 2000 muestras para SHAP | `features.rfr_shap` | Makri no publica sus parámetros | **A:** usar los valores por defecto de scikit-learn (100 árboles, sin límite de profundidad, mínimo 1 por hoja), o probar que la selección de covariables no cambia con otros valores |
+
+### 10.4 Propuesta B (Kalman y Seq2Seq)
+
+| Valor | Dónde | Situación | Cómo fundamentarlo |
+|---|---|---|---|
+| Varianza inicial del filtro (P0 = 1e-2 y 1e-6) y 10 observaciones de calentamiento (`BURN_IN`) | `kalman.py` | Sin fuente | **A:** reemplazar por la inicialización difusa estándar de los modelos de espacio de estados (libro de referencia, pendiente de cita), o probar que el resultado no cambia |
+| Punto de partida de la máxima verosimilitud (`x0`) | `kalman.fit_mle` | Solo es el punto inicial del optimizador | **Prueba:** verificar que distintos puntos de partida llegan a la misma solución |
+| Reiniciar el filtro en saltos y arranques al estimar | `kalman.py`, notebook 05b | Sin fuente | **Prueba:** comparar la verosimilitud y el error con y sin reinicio |
+| Decoder: entrada = salida anterior, estado inicial con Linear + tanh, cabezal con GELU | `model.Seq2SeqAttention` | Detalles no publicados por Gou ni por Khan | **F:** usar ReLU en el cabezal (Gou y Song); el resto se declara como detalle de implementación no publicado (sin fundamento) |
+
+### 10.5 Propuesta D (TCN)
+
+| Valor | Dónde | Situación | Cómo fundamentarlo |
+|---|---|---|---|
+| Convolución inicial de suavizado con kernel 5 | `model.TCNMultiOutput` | Sin fuente | **F:** eliminarla; ni Duan ni Palan la usan |
+| Bloque residual con 2 convoluciones causales y ReLU | `model.TCNBlock` | Duan describe bloques residuales con convoluciones causales dilatadas y cita el TCN original (su ref. 36) | **F / pendiente de cita:** verificar la ref. 36 de Duan y citarla |
+
+### 10.6 Evaluación y criterios
+
+| Valor | Dónde | Situación | Cómo fundamentarlo |
+|---|---|---|---|
+| Bootstrap de 1000 iteraciones con intervalo del 95 % (C2) | `metrics.bootstrap_rmse_diff` | — | **F:** Khan usa intervalos del 95 % estimados con bootstrap de 1000 iteraciones |
+| C3: RMSE < 0,15 V en al menos el **95 %** de las celdas | `docs/metricas.md`, notebook 07 | El 0,15 V viene de la Tabla 10 del OB2; el 95 % no tiene fuente | **Sin fundamento.** C3 es un criterio propio y complementario: o se justifica el 95 % o se declara como límite |
+| C4: R² sobre el cambio > 0 | `docs/metricas.md` | — | **A:** es el mismo umbral que el R² > 0 de la Tabla 10, aplicado al cambio de voltaje |
+| Celdas críticas de los gráficos (mayor voltaje y mayor error) | notebook 07 | Solo para presentar resultados | No afecta métricas ni decisiones; no requiere fundamentación |
