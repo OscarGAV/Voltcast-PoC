@@ -293,7 +293,7 @@ La especificación (`docs/prompt_v1.md`) fija estos tres valores. Como eso solo 
 **Ventana de 30 días: sin fundamento propio por ahora. Estado: pendiente.**
 - **Cómo se eligió:** se tomó de la especificación original (`docs/prompt_v1.md`, L = 720 h = 30 días). **Ningún notebook de la PoC probó otra ventana ni aplicó un método para elegirla.**
 - **Lo único que se verificó** (en el análisis de esta documentación, no en un notebook): la autocorrelación media de los cambios diarios del voltaje (train) es −0,18 a 1 día y ~0 desde los 2 días. Eso indica que la dinámica de corto plazo dura 1 o 2 días y que no hace falta una ventana muy corta, pero **no justifica el valor 30**: una ventana más larga podría estimar mejor el nivel y la tendencia.
-- **Cómo se va a fundamentar** (prueba pendiente, sección 8): grilla de 7, 14, 30, 60 y 90 días en la validación cruzada de 3 bloques, con 3 semillas, eligiendo la ventana de menor error (criterio de las fuentes, sección 8). Si gana otro valor, se cambia la ventana de todos los modelos.
+- **Cómo se va a fundamentar** (prueba pendiente, sección 8): grilla de 7, 14, 30, 60 y 90 días en la validación cruzada de 3 bloques, con 3 semillas, eligiendo la ventana de menor error (criterio de las fuentes, sección 8). **Estado: en curso** (sección 6.4). **Decisión:** la ventana elegida se aplica solo a la Bi-LSTM propia; los modelos del Benchmarking mantienen 30 días y probar su ventana queda como mejora (sección 11, #6).
 
 ### 6.4 Pruebas del paso 3 (señal filtrada)
 
@@ -355,7 +355,7 @@ Costo estimado: ~6 h. La lista completa de mejoras del camino 2 está en la secc
 
 ## 8. Pruebas cortas pendientes
 
-**Estado: ninguna se ejecutó todavía.** Se hacen con datos de train y **antes** de reentrenar, porque si alguna cambia un valor (por ejemplo 12 kA o una ventana de 60 días), cambian los datos de entrada de todos los modelos.
+**Estado: las de limpieza (R3, R4, R5) están hechas (sección 6.2) y las del paso 3 se registran en la sección 6.4 a medida que terminan.** Se hacen con datos de train y **antes** de reentrenar, porque cambian los datos de entrada de los modelos.
 
 **Criterio para elegir un valor dentro de una grilla: el menor error, como en las fuentes.** Las 8 fuentes del Benchmarking eligen su configuración con el menor error de validación (Palan: "mejor pérdida de validación, minimizada en 20 trials", Tabla 3; Makri: menor MSE con SOMA; Khan: menor RMSE; Morcillo: mejor configuración de la grilla; Guan: MSE de validación como aptitud). Ninguna usa la regla de un error estándar, así que no se usa.
 1. Cada valor de la grilla se mide en la validación cruzada de 3 bloques, con 3 semillas.
@@ -393,23 +393,6 @@ El orden importa porque cada paso cambia los datos que usa el siguiente: las pru
 7. Merge a `main`.
 
 **Tiempo estimado:** se actualiza al cerrar el inventario de la sección 10 (las pruebas de limpieza con el criterio de menor error suman ~2 h).
-
----
-
-## 11. Mejoras posibles (no se ejecutan en esta PoC)
-
-Quedan documentadas como trabajo futuro. Ninguna es necesaria para fundamentar la configuración actual, pero cada una eliminaría una limitación declarada.
-
-| # | Mejora | Qué resuelve | Método (fuente) | Tiempo estimado |
-|---|---|---|---|---|
-| 1 | Búsqueda amplia de hiperparámetros de la Bi-LSTM propia | La configuración se fundamenta con valores de fuentes y grillas chicas; una búsqueda podría mejorarla | Optuna (TPE), hasta 100 trials con corte tras 20 sin mejora (Khan), con el espacio de la sección 7 | ~6 h |
-| 2 | SOMA de la Propuesta A con los parámetros de Makri | A usa el óptimo que Makri obtuvo con sus datos, no con los nuestros | SOMA (población 6, *path length* 4, paso 0,11, espacio de 8 hiperparámetros), cortando cuando el líder no mejora en una migración completa (Makri, sec. 2.4.3, paso 6) | 10–20 h por variante (A1 y A2) |
-| 3 | Búsqueda de hiperparámetros de la Propuesta B | Ídem, con el óptimo de Khan | ATPE/TPE con el espacio de Khan (Tabla 10), incluidos q, R y α del Kalman; 100 trials con corte tras 20 sin mejora | ~8 h |
-| 4 | Búsqueda de hiperparámetros de la Propuesta C | Ídem, con el óptimo de Palan | Optuna con el espacio de Palan (Tabla 3), 20 trials | ~2–3 h |
-| 5 | Grilla de la Propuesta D | D usa la configuración fija de Duan y Palan | Grid search de Morcillo (Tabla 2), 24 combinaciones | ~0,5 h |
-| 6 | **Prueba de ventana de entrada para cada modelo del Benchmarking** | Hoy los modelos del Benchmarking usan 30 días (especificación, igual para todos) y solo la Bi-LSTM propia usa la ventana elegida por su prueba (sección 6.4). Ninguna fuente publica una ventana en días que se pueda trasladar | Grilla de 7, 14, 30, 60 y 90 días con el criterio de menor error, para cada modelo | ~1 h por modelo (~5 h en total) |
-
-Las mejoras 1 a 5 suman las **40–55 h de GPU** del camino 2 (sección 3); con la 6, unas 45–60 h.
 
 ---
 
@@ -491,3 +474,20 @@ Surgió de una revisión completa de `config.py`, de los módulos de `src/voltca
 | C3: RMSE < 0,15 V en al menos el **95 %** de las celdas | `docs/metricas.md`, notebook 07 | El 0,15 V viene de la Tabla 10 del OB2; el 95 % no tiene fuente | **Sin fundamento.** C3 es un criterio propio y complementario: o se justifica el 95 % o se declara como límite |
 | C4: R² sobre el cambio > 0 | `docs/metricas.md` | — | **A:** es el mismo umbral que el R² > 0 de la Tabla 10, aplicado al cambio de voltaje |
 | Celdas críticas de los gráficos (mayor voltaje y mayor error) | notebook 07 | Solo para presentar resultados | No afecta métricas ni decisiones; no requiere fundamentación |
+
+---
+
+## 11. Mejoras posibles (no se ejecutan en esta PoC)
+
+Quedan documentadas como trabajo futuro. Ninguna es necesaria para fundamentar la configuración actual, pero cada una eliminaría una limitación declarada.
+
+| # | Mejora | Qué resuelve | Método (fuente) | Tiempo estimado |
+|---|---|---|---|---|
+| 1 | Búsqueda amplia de hiperparámetros de la Bi-LSTM propia | La configuración se fundamenta con valores de fuentes y grillas chicas; una búsqueda podría mejorarla | Optuna (TPE), hasta 100 trials con corte tras 20 sin mejora (Khan), con el espacio de la sección 7 | ~6 h |
+| 2 | SOMA de la Propuesta A con los parámetros de Makri | A usa el óptimo que Makri obtuvo con sus datos, no con los nuestros | SOMA (población 6, *path length* 4, paso 0,11, espacio de 8 hiperparámetros), cortando cuando el líder no mejora en una migración completa (Makri, sec. 2.4.3, paso 6) | 10–20 h por variante (A1 y A2) |
+| 3 | Búsqueda de hiperparámetros de la Propuesta B | Ídem, con el óptimo de Khan | ATPE/TPE con el espacio de Khan (Tabla 10), incluidos q, R y α del Kalman; 100 trials con corte tras 20 sin mejora | ~8 h |
+| 4 | Búsqueda de hiperparámetros de la Propuesta C | Ídem, con el óptimo de Palan | Optuna con el espacio de Palan (Tabla 3), 20 trials | ~2–3 h |
+| 5 | Grilla de la Propuesta D | D usa la configuración fija de Duan y Palan | Grid search de Morcillo (Tabla 2), 24 combinaciones | ~0,5 h |
+| 6 | **Prueba de ventana de entrada para cada modelo del Benchmarking** | Hoy los modelos del Benchmarking usan 30 días (especificación, igual para todos) y solo la Bi-LSTM propia usa la ventana elegida por su prueba (sección 6.4). Ninguna fuente publica una ventana en días que se pueda trasladar | Grilla de 7, 14, 30, 60 y 90 días con el criterio de menor error, para cada modelo | ~1 h por modelo (~5 h en total) |
+
+Las mejoras 1 a 5 suman las **40–55 h de GPU** del camino 2 (sección 3); con la 6, unas 45–60 h.
