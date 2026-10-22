@@ -124,7 +124,16 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 | Lote / épocas | 32 / early stopping (80, paciencia 10) | 16 / 150 fijas (Tabla 6) | F |
 | Weight decay | 1e-4 | Se elimina: Makri no lo usa | F |
 | Recorte de gradiente | 1,0 | Se elimina: Makri no lo usa | F |
-| RFR-SHAP: selección | importancia ≥ 5 % | Igual: Makri toma las 12 más importantes, pero tenemos solo 4 candidatas (kA, voltaje medio de celda, día del año y día de la semana), así que "top-12" las incluiría a todas. Con el 5 % se seleccionaron kA y el día del año | A |
+| RFR-SHAP: selección | importancia ≥ 5 % sobre 4 covariables | Las 12 más importantes entre los modos VMD y las covariables, como Makri (sección 4.2.1) | F |
+
+
+### 4.2.1 Hallazgos al aplicar el BO-VMD y el RFR-SHAP de Makri
+
+- **Makri no usa el VMD para filtrar.** Usa los **modos como variables de entrada**: descompone la serie que pronostica en 15 modos, los agrega como candidatos junto con las demás variables, y RFR-SHAP elige las 12 más importantes (secciones 3.2 y 3.3). No descarta ni suma modos. El uso del VMD como filtro (`N_DROP`) venía de la interpretación del documento del Benchmarking.
+  - **Propuesta A:** se implementa como Makri: modos como candidatos y RFR-SHAP con 100 árboles (el valor que publica Makri) eligiendo las 12 más importantes.
+  - **Nuestro modelo:** cómo usa la señal (sin filtrar, filtrada sin 1, 2 o 3 modos, o modos como entradas) se decide con una prueba de menor error (paso 3, etapa 1).
+- **BO-VMD por celda** (proceso gaussiano con `GPSampler` de Optuna, que implementa el mismo método que scikit-optimize, la biblioteca de Makri; 30 evaluaciones, K ∈ [2, 15], α ∈ [400, 2000], error de reconstrucción): **298 de 300 celdas eligieron K = 15 y α = 400**; una eligió K = 13 y otra K = 15 con α = 513. Es el borde del rango, porque con más modos y bandas más anchas la suma reconstruye mejor la señal; Makri obtuvo lo mismo (K = 15, el máximo). Tomó 38 minutos.
+- **Celdas sin tramo en servicio en train** (A_c123 y A_c124, puenteadas hasta el final de train): no hay datos para optimizar su VMD; se les asignan los parámetros más frecuentes (K = 15, α = 400) (A).
 
 ### 4.3 Propuesta B (Khan, Song, Gou)
 
@@ -393,7 +402,7 @@ Surgió de una revisión completa de `config.py`, de los módulos de `src/voltca
 |---|---|---|---|
 | BO-VMD sobre una muestra de 20 celdas estratificada (`BO_SAMPLE_CELLS`) y regla para usar un par común de K y α (`choose_params`: diferencia de K ≤ 1, razón de α ≤ 2) | `config.py`, `vmd.py`, notebook 05 | Elegidos sin fuente | **F:** Makri aplica BO-VMD a **cada serie que pronostica**. Aplicarlo a cada una de las 300 celdas (~50 min en paralelo) elimina la muestra y la regla de homogeneidad |
 | Parámetros internos del VMD: τ = 0, DC = 0, init = 1, tolerancia 1e-7 | `vmd.py` | Sin cita | **F / pendiente de cita:** la documentación de `vmdpy` recomienda τ = 0 ("para tolerar ruido") e indica una tolerancia "típicamente alrededor de 1e-6". Usar 1e-6 o citar el ejemplo oficial de la biblioteca |
-| Random Forest de RFR-SHAP: 300 árboles, profundidad 8, mínimo 20 por hoja, 2000 muestras para SHAP | `features.rfr_shap` | Makri no publica sus parámetros | **A:** usar los valores por defecto de scikit-learn (100 árboles, sin límite de profundidad, mínimo 1 por hoja), o probar que la selección de covariables no cambia con otros valores |
+| Random Forest de RFR-SHAP: 300 árboles, profundidad 8, mínimo 20 por hoja, 2000 muestras para SHAP | `features.rfr_shap` | Makri publica 100 árboles (sec. 3.3) y no los demás parámetros | **F:** 100 árboles (Makri); los demás, los valores por defecto de scikit-learn, que es la biblioteca que usa Makri (A) |
 
 ### 10.4 Propuesta B (Kalman y Seq2Seq)
 

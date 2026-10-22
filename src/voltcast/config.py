@@ -67,8 +67,8 @@ TARGET_CELLS = None  # None = todas las celdas detectadas en el Excel; o lista, 
 # se usa para que la covariable V_total / celdas en servicio no se distorsione. None = usar las del Excel.
 N_CELDAS_FISICAS = 181
 ANCHOR_DAYS = 7  # días promediados para el ancla del nivel
-KA_SHUTDOWN = 10.0  # kA por debajo = día de paro
-MAX_INTERP_DAYS = 3  # huecos ≤ 3 días se interpolan
+KA_SHUTDOWN = 10.0  # kA por debajo = día de paro (prueba de menor error frente a 13,5 kA, docs/hiperparametros.md 6.2)
+MAX_INTERP_DAYS = 12  # huecos ≤ 12 días se interpolan (prueba de menor error, docs/hiperparametros.md 6.2)
 OOS_MIN_DAYS = 7  # duración mínima de un tramo fuera_servicio
 OOS_MERGE_DAYS = 5  # interrupciones ≤ 5 días no cortan un tramo fuera_servicio
 STEP_THRESHOLD_V = 0.10  # cambio de nivel (V) para registrar un salto

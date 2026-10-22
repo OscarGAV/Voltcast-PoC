@@ -104,18 +104,19 @@ class SeriesTensors:
                  lookback: int = config.LOOKBACK_DAYS, horizon: int = config.HORIZON_DAYS):
         import torch
 
-        from .cleaning import CALIDAD_VALIDA
+        from .cleaning import CALIDAD_OBJETIVO, CALIDAD_VALIDA
 
         self.cells, self.sigma, self.L, self.H, self.device = cells, sigma, lookback, horizon, device
         self.dates = pd.DatetimeIndex(sorted(gold["fecha"].unique()))
-        g = gold.assign(valido=gold["calidad"].isin(CALIDAD_VALIDA))
+        g = gold.assign(valido=gold["calidad"].isin(CALIDAD_VALIDA), objetivo=gold["calidad"].isin(CALIDAD_OBJETIVO))
 
         def t(col, dtype=torch.float32):
             return torch.tensor(pivot(g, col, cells).reindex(self.dates).to_numpy(dtype=float), dtype=dtype, device=device)
 
         self.VF, self.V = t("v_filtrada"), t("voltaje")
         self.KA, self.VC = t("kA_z"), t("vcel_z")
-        self.VALID = t("valido").bool()
+        self.VALID = t("valido").bool()  # entrada: medido o interpolado
+        self.OBJ = t("objetivo").bool()  # objetivo: solo medido
         self.OOS = t("fuera_servicio").bool()
         self.el_flag = torch.tensor([float(c[0] == "B") for c in cells], device=device)
         # Orígenes usables: ventana filtrada completa y sin fuera_servicio (el ancla queda definida)
@@ -163,7 +164,7 @@ class SeriesTensors:
         dentro = tgt <= min(target_limit, len(self.dates) - 1)
         tgt = tgt.clamp(max=len(self.dates) - 1)
         y = (self.V[tgt, cc] - anc[:, None]) / self.sigma
-        mask = dentro & self.VALID[tgt, cc] & torch.isfinite(y)
+        mask = dentro & self.OBJ[tgt, cc] & torch.isfinite(y)
         if mask_jumps:
             mask &= tgt < self.next_jump[t, c][:, None]
         return x, torch.nan_to_num(y), mask, c, self.el_flag[c]
