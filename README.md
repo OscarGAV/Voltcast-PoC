@@ -24,7 +24,7 @@ Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de
 - Nuestras variantes son las mejores en todas las métricas sobre el horizonte completo y, a 180 días, superan al mejor modelo del Benchmarking con significancia estadística. A 60 días la ventaja no es significativa y la persistencia queda levemente mejor en RMSE.
 - **Frente a Power BI:** nuestro modelo supera a ETS (Holt), el método de su pronóstico integrado, en todas las métricas y horizontes. ETS depende mucho de cómo se eligen sus parámetros: sin tendencia (β = 0) se comporta como una persistencia suavizada y, como ella, queda algo mejor que nuestro modelo en RMSE a 60 días (sección 4.1 del notebook 07).
 - Ningún modelo del Benchmarking supera a la persistencia; el ranking empírico (B > C > A > D) no coincide con el de la literatura (A > C > D > B).
-- **Intento de mejora (notebook 06e):** ensamble de 5 semillas y corrección por riesgo de intervención (las intervenciones se concentran en las celdas de mayor voltaje). Mejora apenas en validación (RMSE 1–180 0,0580 V; 60 días 0,0576 V) y no cierra ningún criterio, así que se mantiene la Bi-LSTM original.
+- **Intento de mejora (notebook 06e):** ensamble de 5 semillas y corrección por riesgo de intervención (las intervenciones se concentran en las celdas de mayor voltaje). Mejora apenas en validación (RMSE 1–180 0,0580 V; 60 días 0,0576 V) y no cierra ningún criterio, así que se mantiene la Bi-LSTM original. **La v2 es un intento descartado:** se va a quitar de la comparación del notebook 07 y queda solo como registro (notebook 06e y [`docs/intentos_mejora.md`](docs/intentos_mejora.md)).
 - **Límite:** el R² sobre el cambio de voltaje es ≈ 0 para todos los modelos. La ventaja de nuestro modelo es seguir mejor el nivel y la deriva de cada celda; ninguno anticipa los cambios individuales, dominados por las intervenciones de mantenimiento.
 
 - **Requisito de finalización: cumplido.** La Bi-LSTM cumple los criterios de la documentación del proyecto (OB2 Tabla 10 / RNF-06: MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en todos los horizontes y supera a los 5 modelos del Benchmarking en las 5 métricas. A1 y A2 (la propuesta ganadora del Benchmarking) y D no cumplen el requisito: su R² queda por debajo de 0. Ver [`docs/metricas.md`](docs/metricas.md).
@@ -71,7 +71,7 @@ Abrir los notebooks con el kernel **VoltCast (.venv 3.13)** y ejecutarlos en ord
 | `06b_modelado_seq2seq_kalman` | 4 | Propuesta B: Seq2Seq + atención + ensamble con Kalman | 14 min |
 | `06c_modelado_propuesta_a` | 4 | Propuesta A (A1 y A2): RFR-SHAP + SOMA + Bi-NOA-LSTM MIMO | ~3 h (SOMA) |
 | `06d_modelado_stgru_tcn` | 4 | Propuestas C (ST-GRU) y D (TCN) | 8 min |
-| `06e_mejora_modelo_propio` | 4 | Intento de mejora: ensamble de 5 semillas + riesgo de intervención, elegido con validación cruzada dentro de train | 30 min |
+| `06e_mejora_modelo_propio` | 4 | **Intento descartado** (solo registro): ensamble de 5 semillas + riesgo de intervención, elegido con validación cruzada dentro de train | 30 min |
 | `07_evaluacion` | 5 | Comparación de los 10 modelos, ranking y conclusiones | 2 min |
 
 Los notebooks también pueden ejecutarse en **Google Colab**: detectan Colab, montan Google Drive y buscan el proyecto en `MyDrive/Poc-TP1`.

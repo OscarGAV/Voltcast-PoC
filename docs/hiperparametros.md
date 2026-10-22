@@ -105,10 +105,9 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 | Bloque de early stopping | últimos 270 días de train | Igual: ~15 % de train. **Pendiente:** confirmar en las fuentes la proporción de validación dentro de train (Song usa 20 %; Makri no la detalla) | A (pendiente de confirmar) |
 | Máscara de saltos | sí | Igual: ablación del notebook 06 | A |
 | Celda LSTM frente a NOA | LSTM | Igual: ablación de los notebooks 06 y 07 | A |
-| Ensamble de 5 semillas (v2) | 5 | Igual: validación cruzada del notebook 06e | A |
-| Riesgo de intervención: λ (v2) | 0,05 | Igual: validación cruzada del notebook 06e, con una regla fijada antes de ver los resultados | A |
-| Riesgo de intervención: tramos de percentil (v2) | 0–0,5–0,8–0,9–0,95–1 | Se documenta con la sección 6.1 como fundamento parcial y como límite. La v2 no es el modelo elegido | A parcial / límite |
 | Bloques de la validación cruzada | F1, F2, F3 | Igual: elegidos para incluir períodos con campañas de mantenimiento (F1, F2) y sin ellas (F3) | A |
+
+**Bi-LSTM v2 (notebook 06e): intento descartado.** No es mejor que la Bi-LSTM original y no cumple ningún criterio que la original no cumpla, así que **se quita de la comparación de la PoC** (notebook 07, ranking, README y tabla de modelos). El notebook 06e y `docs/intentos_mejora.md` se mantienen como registro del intento, porque respaldan que el límite son los datos y no el modelo. Sus parámetros (ensamble de 5 semillas, λ = 0,05, tramos de percentil) ya no forman parte de la PoC y no requieren fundamentación; la sección 6.1 queda solo como registro.
 
 ### 4.2 Propuesta A (Makri)
 
@@ -190,16 +189,15 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 
 1. **Cabezas de atención de B (4):** ninguna fuente las publica. Se puede cerrar con una prueba de 1, 2, 4 y 8 cabezas (~1 h).
 2. **Grilla de α y β de ETS:** se puede reemplazar por una optimización continua.
-3. **Tramos de percentil del riesgo de intervención (v2):** respaldo parcial (sección 6.1); se documentan como límite.
-4. **Parámetros del VMD causal** (365 días de historia, 60 días de segmento mínimo, 1 modo descartado): hay que medir su efecto o buscar una fuente.
-5. **Umbrales de limpieza con respaldo parcial** (sección 6.2): interpolación de 3 días, tramos mínimos de 7 y 5 días, ventana de 7 días para saltos. Se cierran con pruebas cortas.
-6. **Ventana de entrada de 30 días** (sección 6.3): se cierra con una prueba de 30, 60 y 90 días.
+3. **Parámetros del VMD causal** (365 días de historia, 60 días de segmento mínimo, 1 modo descartado): hay que medir su efecto o buscar una fuente.
+4. **Umbrales de limpieza con respaldo parcial** (sección 6.2): interpolación de 3 días, tramos mínimos de 7 y 5 días, ventana de 7 días para saltos. Se cierran con pruebas cortas.
+5. **Ventana de entrada de 30 días** (sección 6.3): **hoy no tiene fundamento propio**, porque se tomó de la especificación. Se cierra con la grilla de 7, 14, 30, 60 y 90 días y la regla de un error estándar (sección 8).
 
 ---
 
 ## 6. Verificaciones hechas con los datos
 
-### 6.1 Tramos de percentil del riesgo de intervención (v2)
+### 6.1 Tramos de percentil del riesgo de intervención (v2, intento descartado: solo registro)
 
 Probabilidad de una caída de nivel en los 180 días siguientes según el percentil de voltaje de la celda en su electrolizador (train, orígenes cada 7 días):
 
@@ -218,7 +216,7 @@ Probabilidad de una caída de nivel en los 180 días siguientes según el percen
 - **El tramo 0,8–0,9 mezcla dos riesgos muy distintos** (15,6 % y 38,1 %).
 - Los tramos que respaldan los datos serían: 0–0,7 · 0,7–0,8 · 0,8–0,85 · 0,85–0,9 · 0,9–0,95 · 0,95–1.
 
-**Decisión:** se documenta esta tabla como fundamento parcial y como límite. No se rehace la v2, porque no es el modelo elegido.
+**Decisión:** la v2 se descartó de la PoC (sección 4.1). Esta tabla queda como registro del análisis y como evidencia de que el riesgo de intervención depende del nivel relativo de la celda.
 
 ### 6.2 Umbrales de limpieza (Silver, notebooks 03 y 04)
 
@@ -238,8 +236,11 @@ El análisis exploratorio del notebook 03 justifica **por qué existe cada regla
 
 La especificación (`docs/prompt_v1.md`) fija estos tres valores. Como eso solo no alcanza, se fundamentan con los datos y con las fuentes.
 
-**Horizonte de 180 días: justificado (A).**
-- En train hubo 16 intervalos entre campañas de mantenimiento: **mediana de 137 días**, y **12 de 16 duran menos de 180 días**. Las campañas se detectaron como ≥ 5 saltos del electrolizador en 30 días; las del EL A fueron jul-20, oct-20, mar-21, jul-21, ene-22, may-22, oct-22, feb-23 y jul-24.
+**Horizonte de 180 días: justificado (A). Estado: hecho.**
+- **El horizonte es un requisito, no un hiperparámetro.** No se optimiza por error, porque el error siempre crece con el horizonte; se define por hasta dónde necesita ver el usuario.
+- **De dónde sale el valor exacto:** el sistema tiene que anticipar qué celdas superarán el umbral antes de la próxima campaña de mantenimiento. Ese plazo de planificación se define como **6 meses**, que expresados en meses de 30 días son **180 días** (6 × 30).
+- **Por qué no 181 u otro valor cercano:** el modelo pronostica cada día del 1 al 180, así que el usuario puede consultar cualquier plazo intermedio, y entre 178 y 181 días el error prácticamente no cambia (la curva de error frente al horizonte del notebook 07 es suave). Ninguna medición puede distinguir 180 de 181; lo que se justifica es el orden de magnitud (unos 6 meses) y la convención de expresarlo en meses de 30 días.
+- **Respaldo con los datos:** en train hubo 16 intervalos entre campañas de mantenimiento: **mediana de 137 días**, **percentil 75 de ~178 días**, y **12 de 16 duran menos de 180 días**. Las campañas se detectaron como ≥ 5 saltos del electrolizador en 30 días; las del EL A fueron jul-20, oct-20, mar-21, jul-21, ene-22, may-22, oct-22, feb-23 y jul-24.
 - Con un horizonte de 180 días, el ingeniero ve qué celdas superarán el umbral **antes de la próxima campaña**, que es lo que necesitan las alertas de las historias US026 y US028.
 
 **Split 80/20: justificado (F + A).**
@@ -254,10 +255,10 @@ La especificación (`docs/prompt_v1.md`) fija estos tres valores. Como eso solo 
 
 80/20 es el mayor porcentaje de entrenamiento que mantiene una validación estadísticamente útil. El 90/10 se evaluó y se descartó (ver "Decisiones" en `prompt.md` y en el README).
 
-**Ventana de 30 días: justificada en parte.**
-- La autocorrelación media de los cambios diarios del voltaje (train) es −0,18 a 1 día y ~0 desde los 2 días: la dinámica de corto plazo dura 1 o 2 días, y 30 días la cubren de sobra.
-- Eso **no explica por qué 30 y no 60 o 90**: una ventana más larga podría estimar mejor el nivel y la tendencia.
-- Prueba: comparar 30, 60 y 90 días en la validación cruzada de 3 bloques (~1 h, porque hay que recalcular las ventanas de VMD causal).
+**Ventana de 30 días: sin fundamento propio por ahora. Estado: pendiente.**
+- **Cómo se eligió:** se tomó de la especificación original (`docs/prompt_v1.md`, L = 720 h = 30 días). **Ningún notebook de la PoC probó otra ventana ni aplicó un método para elegirla.**
+- **Lo único que se verificó** (en el análisis de esta documentación, no en un notebook): la autocorrelación media de los cambios diarios del voltaje (train) es −0,18 a 1 día y ~0 desde los 2 días. Eso indica que la dinámica de corto plazo dura 1 o 2 días y que no hace falta una ventana muy corta, pero **no justifica el valor 30**: una ventana más larga podría estimar mejor el nivel y la tendencia.
+- **Cómo se va a fundamentar** (prueba pendiente, sección 8): grilla de 7, 14, 30, 60 y 90 días en la validación cruzada de 3 bloques, con 3 semillas, eligiendo con la regla de un error estándar. Si la regla elige otro valor, se cambia la ventana de todos los modelos.
 
 ---
 
@@ -291,7 +292,13 @@ Costo estimado: ~6 h. Para los otros modelos, el camino 2 sería: A, SOMA con lo
 
 ## 8. Pruebas cortas pendientes
 
-Se hacen con datos de train y **antes** de reentrenar, porque si alguna cambia un valor (por ejemplo 12 kA o una ventana de 60 días), cambian los datos de entrada de todos los modelos.
+**Estado: ninguna se ejecutó todavía.** Se hacen con datos de train y **antes** de reentrenar, porque si alguna cambia un valor (por ejemplo 12 kA o una ventana de 60 días), cambian los datos de entrada de todos los modelos.
+
+**Regla para elegir un valor dentro de una grilla:** la **regla de un error estándar** (Breiman et al., 1984, *Classification and Regression Trees*; Hastie, Tibshirani y Friedman, *The Elements of Statistical Learning*, sec. 7.10):
+1. Se mide el error de cada valor de la grilla en la validación cruzada de 3 bloques, con 3 semillas, para estimar su variación.
+2. Se elige **el valor más simple** (ventana más corta, modelo más chico) **cuyo error esté dentro de un error estándar del mejor**.
+
+La regla da un único valor y explica por qué, por ejemplo, se elige 30 y no 29: los valores fuera de la grilla no se prueban porque sus diferencias son menores que la variación entre semillas (±2 %), y entre los de la grilla gana el más simple que no es peor de forma medible. Se aplica a todas las grillas: ventana, ancla y embedding, cabezas de atención de B y ventana de detección de saltos.
 
 | Prueba | Qué fundamenta | Tiempo |
 |---|---|---|
@@ -299,8 +306,8 @@ Se hacen con datos de train y **antes** de reentrenar, porque si alguna cambia u
 | Etiquetado fuera de servicio con tramos de 3, 5, 7 y 14 días | R5 (7 y 5 días) | minutos |
 | Ventana de detección de saltos de 3, 5, 7 y 14 días | R9 (7 días) | minutos |
 | Corte de paro en 10 y 12 kA | R4 | minutos |
-| Ventana de entrada de 30, 60 y 90 días (validación cruzada de 3 bloques) | L | ~1 h |
-| Grilla ancla {3, 7, 14} × embedding {4, 8, 16} | Bi-LSTM | ~40 min |
+| Ventana de entrada de 7, 14, 30, 60 y 90 días (validación cruzada de 3 bloques, 3 semillas, regla de un error estándar). El VMD causal se calcula una sola vez con 90 días y las ventanas más cortas se toman de ahí | L | ~1 h |
+| Grilla ancla {3, 7, 14} × embedding {4, 8, 16} (regla de un error estándar) | Bi-LSTM | ~40 min |
 | Mediciones de lote y separación de orígenes (Bi-LSTM, B, C) | Lote, orígenes cada 5 y cada 10 días | ~20 min |
 | Cabezas de atención {1, 2, 4, 8} (opcional) | B | ~1 h |
 | ETS con α y β continuos (opcional) | ETS | minutos |
@@ -310,7 +317,7 @@ Se hacen con datos de train y **antes** de reentrenar, porque si alguna cambia u
 ## 9. Orden de trabajo (rama `feature/test`)
 
 1. Pruebas cortas de la sección 8 y actualización de este documento con sus resultados.
-2. Cambios de configuración y de código: BO-VMD de Makri, módulo espacial de Palan para C, Kalman de Khan para B, y la configuración de la sección 4.
+2. Cambios de configuración y de código: BO-VMD de Makri, módulo espacial de Palan para C, Kalman de Khan para B, la configuración de la sección 4, y **quitar la v2 de la comparación** (notebook 07, ranking, README).
 3. Reconstruir Silver y Gold (notebooks 04, 05 y 05b) si cambian umbrales o el BO-VMD.
 4. Reentrenar todos los modelos (notebooks 06, 06b, 06c, 06d y 06e).
 5. Ejecutar de nuevo el notebook 07, una sola vez, y actualizar el README, `docs/metricas.md` y `docs/intentos_mejora.md`.
