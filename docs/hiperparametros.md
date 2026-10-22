@@ -233,6 +233,31 @@ El análisis exploratorio del notebook 03 justifica **por qué existe cada regla
 | **Fuera de servicio: tramo ≥ 7 días e interrupciones ≤ 5 días** (R5) | Con mínimos de 3, 5, 7 y 14 días y uniones de 3, 5 y 7 días, los días-celda válidos de train son **idénticos** (547 507; 0 de diferencia) | **Justificado (A): insensible.** El umbral solo cambia la etiqueta entre categorías que igual se descartan |
 | **Ventana de 7 días para detectar saltos** (R9) | No probado | **Pendiente.** Prueba: comparar 3, 5, 7 y 14 días |
 
+
+#### Resultado de la prueba de menor error para R3 y R4 (hecha)
+
+**Procedimiento (fijado antes de ejecutar):**
+- **Variantes:** paro en 10 o 13,5 kA, por interpolación de 3 o 12 días.
+- **Datos:** para cada variante se reconstruyeron Silver y Gold de train. El VMD usó los parámetros actuales, iguales en todas, para que solo cambie la limpieza.
+- **Modelo:** la Bi-LSTM con la configuración actual (45 épocas, semillas 42, 43 y 44), en los bloques F1, F2 y F3.
+- **Objetivos:** solo voltajes medidos.
+- **Evaluación:** sobre los **mismos objetivos en todas las variantes** (los días-celda válidos en las cuatro: 2,66 M en F1, 2,88 M en F2 y 1,27 M en F3).
+- **Criterio:** menor RMSE (1–180 días), relativo a la variante actual en cada bloque y promediado en los 3 bloques. Se informa el error estándar entre semillas.
+
+| Paro | Interpolación | RMSE relativo (media ± error estándar) | RMSE F1 / F2 / F3 (V) |
+|---|---|---|---|
+| 10 kA | 3 días (actual) | 1,0000 | 0,1500 / 0,0453 / 0,0172 |
+| **10 kA** | **12 días** | **0,9978 ± 0,0038** | 0,1494 / 0,0460 / 0,0169 |
+| 13,5 kA | 3 días | 1,0102 ± 0,0055 | 0,1515 / 0,0457 / 0,0174 |
+| 13,5 kA | 12 días | 1,0066 ± 0,0063 | 0,1523 / 0,0459 / 0,0170 |
+
+**Decisiones:**
+- **R4 (paro): se mantienen 10 kA.** Excluir los días de carga reducida (13,5 kA) no mejora el pronóstico: empeora el RMSE un 0,7–1,0 % en promedio.
+- **R3 (interpolación): 12 días**, la variante de menor error.
+- **Con estos datos, 3 y 12 días son equivalentes:** la diferencia (−0,22 %) es menor que el error estándar (0,38 %).
+- **Efecto colateral:** con 12 días se detectan más saltos de nivel (443 frente a 368 en train), porque la regla R9 tiene datos donde antes había huecos. La prueba ya incluye ese efecto.
+- **El análisis exploratorio anterior** (desvío frente a días vecinos, error de interpolación frente al cambio diario) queda solo como descripción de los datos, no como fundamento de la decisión.
+
 ### 6.3 Ventana de 30 días, horizonte de 180 días y split 80/20
 
 La especificación (`docs/prompt_v1.md`) fija estos tres valores. Como eso solo no alcanza, se fundamentan con los datos y con las fuentes.
@@ -308,7 +333,7 @@ Costo estimado: ~6 h. Para los otros modelos, el camino 2 sería: A, SOMA con lo
 |---|---|---|
 | **Hecha:** etiquetado fuera de servicio con tramos de 3, 5, 7 y 14 días | R5 (7 y 5 días): insensible | — |
 | **Hecha (exploratoria):** interpolación con huecos de 1 a 14 días y relación voltaje–corriente | R3 y R4: definen las variantes a probar | — |
-| Paro (10 o 13,5 kA) × interpolación (3 o 12 días): reconstruir Silver y Gold con cada variante, entrenar la Bi-LSTM en la CV de 3 bloques con 3 semillas y **evaluar todas sobre el mismo conjunto de días** (voltajes medidos con corriente ≥ 13,5 kA, válidos en todas), eligiendo la de menor error | R3 y R4 | ~2 h |
+| **Hecha:** paro (10 o 13,5 kA) × interpolación (3 o 12 días), con la CV de 3 bloques, 3 semillas y los mismos objetivos en todas las variantes. Resultado: **10 kA y 12 días** (sección 6.2) | R3 y R4 | 40 min |
 | Umbral (0,05, 0,10, 0,15 V) × ventana (3, 5, 7, 14 días) de detección de saltos, con el mismo procedimiento (afecta la máscara de saltos del entrenamiento) | R9 | ~1 h |
 | Ventana de entrada de 7, 14, 30, 60 y 90 días (validación cruzada de 3 bloques, 3 semillas, menor error). El VMD causal se calcula una sola vez con 90 días y las ventanas más cortas se toman de ahí | L | ~1 h |
 | Grilla ancla {3, 7, 14} × embedding {4, 8, 16} (menor error) | Bi-LSTM | ~40 min |
