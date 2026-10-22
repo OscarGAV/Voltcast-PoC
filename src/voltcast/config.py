@@ -86,15 +86,15 @@ ES_BLOCK_DAYS = 270  # último bloque de train usado para early stopping
 REFIT_FULL_TRAIN = True  # tras el early stopping, reentrenar con todo train durante las épocas elegidas
 TRAIN = {
     "hidden": 64, "layers": 1, "emb_dim": 8, "head_hidden": 256, "dropout": 0.2,
-    "batch_size": 1024, "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0,
-    "max_epochs": 80, "patience": 10, "stride": 5,  # orígenes de train cada 5 días (fase aleatoria por época)
+    "batch_size": 1024, "lr": 1e-3, "weight_decay": 1e-4, "clip": None,
+    "max_epochs": 200, "patience": 20, "stride": 5,  # paciencia y máximo: Khan et al. (2026); orígenes cada 5 días
 }
 SEED = 42
 
 # Propuesta B: Seq2Seq BiLSTM + atención multi-cabeza + filtro de Kalman (ensamble de semillas)
 SEQ2SEQ = {
     "arch": "seq2seq", "hidden": 64, "dec_hidden": 128, "heads": 4, "emb_dim": 8, "dropout": 0.2,
-    "batch_size": 512, "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0,  # lote limitado por la memoria de la GPU (8 GB)
+    "batch_size": 512, "lr": 1e-3, "weight_decay": 1e-4, "clip": None,  # lote limitado por la memoria de la GPU (8 GB)
     "max_epochs": 40, "patience": 6, "stride": 10,  # decoder de 180 pasos: épocas más caras → orígenes cada 10 días
 }
 ENSEMBLE_SEEDS = [42, 43, 44]
@@ -102,7 +102,7 @@ PROPIO_SEEDS = [42, 43, 44, 45, 46]  # ensamble de semillas de la Bi-LSTM v2 (no
 FUSION_ALPHAS = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]  # ensamble red + Kalman (Khan et al., 2026)
 
 # Propuesta A tal cual el Benchmarking: MIMO + SOMA + RFR-SHAP + Min-Max
-MIMO_TRAIN = {"arch": "mimo", "dropout": 0.2, "weight_decay": 1e-4, "clip": 1.0, "batch_size": 32, "stride": 1,
+MIMO_TRAIN = {"arch": "mimo", "dropout": 0.2, "weight_decay": 1e-4, "clip": None, "batch_size": 32, "stride": 1,
               "max_epochs": 80, "patience": 10}
 SOMA = {"pop": 5, "migrations": 3, "path_length": 2.0, "step": 0.4, "prt": 0.3, "max_epochs": 20, "patience": 4}
 SOMA_SPACE = {"lr": (1e-4, 1e-2), "layers": (1, 3), "hidden": (32, 256)}
@@ -110,8 +110,8 @@ SHAP_UMBRAL_PCT = 5.0  # % mínimo de importancia SHAP para incluir una covariab
 
 # Propuestas C (ST-GRU) y D (TCN)
 STGRU = {"arch": "stgru", "gcn_dim": 32, "hidden": 64, "dropout": 0.2, "vecinas": 1, "k_correlacion": 4,
-         "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0, "batch_size": 16, "stride": 1, "max_epochs": 80, "patience": 10}
-TCN = {"arch": "tcn", "channels": 64, "dropout": 0.2, "lr": 1e-3, "weight_decay": 1e-4, "clip": 1.0,
+         "lr": 1e-3, "weight_decay": 1e-4, "clip": None, "batch_size": 16, "stride": 1, "max_epochs": 80, "patience": 10}
+TCN = {"arch": "tcn", "channels": 64, "dropout": 0.2, "lr": 1e-3, "weight_decay": 1e-4, "clip": None,
        "batch_size": 32, "stride": 1, "max_epochs": 80, "patience": 10}
 
 # Umbrales de calidad usados en EDA y Silver

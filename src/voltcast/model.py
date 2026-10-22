@@ -74,7 +74,7 @@ class BiNOALSTM(nn.Module):
 class VoltCastNet(nn.Module):
     """Canal independiente con pesos compartidos: ventana ``[B, L, F]`` de una celda → ``[B, H]`` (y normalizado).
 
-    Cabezal: concat(h_final, embedding de celda, flag EL) → Linear → GELU → Linear(→ H), sin activación de salida.
+    Cabezal: concat(h_final, embedding de celda, flag EL) → Linear → ReLU → Linear(→ H), sin activación de salida.
     ``use_noa=False`` usa ``nn.LSTM(bidirectional=True)`` (ablación).
     """
 
@@ -92,7 +92,7 @@ class VoltCastNet(nn.Module):
         self.head = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(2 * hidden + emb_dim + 1, head_hidden),
-            nn.GELU(),
+            nn.ReLU(),  # ReLU en las capas densas, como Song et al. (2025) y Gou et al. (2024)
             nn.Dropout(dropout),
             nn.Linear(head_hidden, horizon),
         )
@@ -132,7 +132,7 @@ class Seq2SeqAttention(nn.Module):
         self.o = nn.Linear(d, d)
         self.decoder = nn.LSTMCell(1 + d, dec_hidden)
         self.drop = nn.Dropout(dropout)
-        self.out = nn.Sequential(nn.Linear(dec_hidden + d, dec_hidden), nn.GELU(), nn.Linear(dec_hidden, 1))
+        self.out = nn.Linear(dec_hidden + d, 1)  # una capa totalmente conectada sobre [estado, contexto]: Gou et al. (2024), ec. 14
 
     def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor) -> Tensor:
         enc, (h_n, _) = self.encoder(x)  # [B, L, d]
@@ -271,7 +271,7 @@ def masked_mse(pred: Tensor, y: Tensor, mask: Tensor) -> Tensor:
     return ((pred - y) ** 2 * m).sum() / m.sum().clamp(min=1.0)
 
 
-def run_epoch(model, data, c, t, target_limit: int, batch_size: int, opt=None, clip: float = 1.0,
+def run_epoch(model, data, c, t, target_limit: int, batch_size: int, opt=None, clip: float | None = None,
               generator=None, mask_jumps: bool = False) -> tuple[float, int]:
     """Una pasada sobre los pares (c, t). Con ``opt`` entrena; sin él evalúa. Devuelve (MSE normalizado, n objetivos)."""
     train = opt is not None
@@ -288,7 +288,8 @@ def run_epoch(model, data, c, t, target_limit: int, batch_size: int, opt=None, c
             if train:
                 opt.zero_grad(set_to_none=True)
                 loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), clip)
+                if clip:
+                    nn.utils.clip_grad_norm_(model.parameters(), clip)
                 opt.step()
             k = int(mask.sum())
             se += float(loss.detach()) * k
@@ -327,14 +328,15 @@ def fit(model, data, train_range: tuple[int, int], train_target_limit: int, cfg:
 
     gen = torch.Generator(device=data.device).manual_seed(seed)
     rng = torch.Generator().manual_seed(seed)
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
+    # Adam como todas las fuentes; weight_decay en Adam es la penalización L2 (equivale a la L2 de Khan et al.)
+    opt = torch.optim.Adam(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     max_ep = epochs or cfg["max_epochs"]
     hist, best, best_state, best_ep, wait = [], float("inf"), None, 0, 0
     for ep in range(1, max_ep + 1):
         t0 = time.time()
         phase = int(torch.randint(cfg["stride"], (1,), generator=rng))
         c, t = data.origins(*train_range, stride=cfg["stride"], phase=phase)
-        tr_mse, _ = run_epoch(model, data, c, t, train_target_limit, cfg["batch_size"], opt, cfg["clip"], gen, mask_jumps)
+        tr_mse, _ = run_epoch(model, data, c, t, train_target_limit, cfg["batch_size"], opt, cfg.get("clip"), gen, mask_jumps)
         row = {"epoca": ep, "train_mse": tr_mse, "segundos": time.time() - t0}
         if val_pairs is not None:
             va_mse, _ = run_epoch(model, data, *val_pairs, val_target_limit, 4 * cfg["batch_size"], mask_jumps=mask_jumps)
