@@ -96,6 +96,8 @@ Poc-TP1/                                    # C:\Proyectos\Poc-TP1 (fuera de One
 - Toda la lógica reutilizable vive en `src/voltcast/`; los notebooks orquestan, muestran y documentan.
 - Compatibles con Colab: `config.py` detecta si corre en Colab (monta Drive y ajusta `BASE_DIR`) o en local.
 - Formato de las capas: Parquet (`pyarrow`). Cada escritura va acompañada de un `_metadata.json` con fecha de ejecución, filas, columnas, archivo de origen y hash del origen (trazabilidad).
+- **Fundamentación de configuraciones:** todo valor de configuración o hiperparámetro debe estar fundamentado en [`docs/hiperparametros.md`](docs/hiperparametros.md) con una fuente del Benchmarking (F), una adaptación justificada con una medición o un análisis de los datos (A) o una prueba corta con datos de train. No se aceptan valores elegidos solo por criterio propio; lo que no tenga fundamento se declara como límite.
+- **Ramas:** los cambios de configuración y los experimentos se hacen en `feature/test` y llegan a `main` con merge.
 
 ### `config.py` (parámetros centrales)
 ```python
@@ -123,6 +125,7 @@ REFIT_FULL_TRAIN = True     # reentrenar con todo train durante las épocas eleg
 COV_CLIP        = 5.0       # |z| máximo de las covariables
 SEED            = 42
 ```
+Los valores de `config.py` se fundamentan en `docs/hiperparametros.md`: la sección 6 respalda con datos `LOOKBACK_DAYS`, `HORIZON_DAYS`, `VAL_FRACTION` y los umbrales de limpieza, y la sección 8 lista las pruebas pendientes (por ejemplo, `KA_SHUTDOWN` 10 o 12 kA, `MAX_INTERP_DAYS`, `OOS_MIN_DAYS`/`OOS_MERGE_DAYS` y la ventana de 30, 60 o 90 días). Las pruebas se hacen **antes** de reentrenar, porque cambian los datos de entrada de todos los modelos.
 
 ---
 
@@ -174,7 +177,10 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 
 **Optimización bayesiana sobre una muestra representativa:**
 - Elegir `BO_SAMPLE_CELLS` = 20 celdas (10 por electrolizador), estratificadas por posición en el stack (inicio, medio y final) y por nivel de voltaje. Excluir celdas con tramos `fuera_servicio`.
-- Para cada celda de la muestra, optimización bayesiana (`optuna`, TPE, `BO_TRIALS` pruebas) de `K` (p. ej. 3–10) y `alpha` (p. ej. 500–5000, escala logarítmica) de VMD (`vmdpy`), minimizando la **entropía de envolvente** de los modos.
+- Para cada celda de la muestra, optimización bayesiana de `K` y `alpha` de VMD (`vmdpy`), con `BO_TRIALS` = 30 evaluaciones.
+  - **Configuración de Makri et al. (2026)** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`): proceso gaussiano (scikit-optimize), `K ∈ [2, 15]`, `alpha ∈ [400, 2000]`, minimizando el **error de reconstrucción** (ec. 14).
+  - La configuración usada hasta ahora (TPE de `optuna`, `K` 3–10, `alpha` 500–5000 logarítmico, entropía de envolvente) no tiene fuente.
+  - Cambiar el BO-VMD cambia la señal filtrada de **todos** los modelos que la usan, incluidos los propios.
 - **Verificación de homogeneidad:** tabla y gráfico de los `K` y `alpha` óptimos de la muestra.
   - Si son parecidos, se usa un par común (la mediana).
   - Si difieren mucho entre electrolizadores, se usa un par por electrolizador. Documentar la decisión.
@@ -210,28 +216,54 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - Cabezal: `concat(h_final, embedding_celda, flag_EL) → Linear → Linear(→ 180)`, sin activación de salida.
 - Entrenamiento: AdamW, *early stopping* sobre el último bloque de train (**no** sobre validación), GPU si está disponible, orígenes submuestreados (stride 3–7 días, fase aleatoria por época) para acortar las épocas. En el bloque de early stopping, los objetivos del train interno se cortan antes del bloque. Con la época elegida se reentrena con todo train (`REFIT_FULL_TRAIN`).
 - **Ablación:** entrenar también con `USE_NOA=False` (`nn.LSTM(bidirectional=True)`).
+- **Configuración fundamentada** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`), sección 4.1:
+  - se mantienen 64 unidades, 1 capa y LR 1e-3 (modelo base de Makri, Tabla 3), y dropout 0,2, weight decay 1e-4 y capa de salida de 256 (Khan, Tabla 7);
+  - paciencia 20 y máximo de 200 épocas (Khan y Song);
+  - **sin** recorte de gradiente, porque ninguna fuente lo usa;
+  - lote de 1024 y orígenes cada 5 días, justificados con mediciones;
+  - ancla {3, 7, 14} × embedding {4, 8, 16}, elegidos con una grilla en la validación cruzada de 3 bloques del notebook 06e.
 - Salida: `models/bi_noa_lstm.pt`, `models/bi_lstm_baseline.pt` (pesos, config, escaladores, versión) y curvas de entrenamiento en `reports/`.
 
 ### 05b — Preparación Gold: filtro de Kalman (Propuesta B)
 - Modelo de nivel y tendencia local; varianzas por máxima verosimilitud **solo con train** (reiniciando el filtro en saltos y arranques solo para estimar).
+- **Configuración de Khan et al. (2026)** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`): estado `[nivel, velocidad, aceleración]`. La estimación de las varianzas por máxima verosimilitud se mantiene (Khan las ajusta con ATPE); falta citar un libro de referencia de modelos de espacio de estados.
 - Filtro causal sobre la serie completa (no requiere recalcular por origen). Salida: `data/gold/series_kalman.parquet` (nivel y pendiente), `data/gold/escaladores_kalman.json`, `models/kalman_params.json`.
 
 ### 06b — Propuesta B: Seq2Seq BiLSTM + atención + Kalman
 - Encoder BiLSTM, decoder LSTM con atención multi-cabeza y **decodificación paso a paso** (Gou et al., 2024), sobre la señal de Kalman. Una semilla (`SEED`), sin máscara de saltos.
 - **Ensamble neuro-estocástico** (Khan et al., 2026): `V̂ = α · V̂_red + (1 − α) · V̂_Kalman`, con `V̂_Kalman = nivel + pendiente · h` y `α ∈ [0,3; 0,7]` elegido en el bloque final de train.
+- **Configuración fundamentada** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`), sección 4.3:
+  - encoder de 32 y decoder de 64 (Gou et al., 2024) y capas densas de 256 y 128 (Khan, Tabla 7);
+  - LR 1e-3, dropout 0,2 y L2 1e-4 (Khan);
+  - paciencia 20 y máximo de 200 épocas (Khan);
+  - **un solo modelo**, sin ensamble de semillas;
+  - lote de 512 y orígenes cada 10 días, justificados con mediciones;
+  - las cabezas de atención no están publicadas en ninguna fuente: se prueban {1, 2, 4, 8} o se declara como límite.
 - Salida: `models/modelo_B.pt`.
 
 ### 06c — Propuesta A tal cual el Benchmarking (A1 y A2)
 - **RFR-SHAP:** Random Forest + SHAP sobre covariables candidatas (kA, voltaje medio por celda, calendario) para seleccionar las que entran al modelo (umbral de importancia documentado).
+- RFR-SHAP: se mantiene el umbral del 5 %, porque hay solo 4 covariables candidatas y el "top-12" de Makri las incluiría a todas.
 - **Min-Max** por columna ajustado con train (entradas BO-VMD y objetivos reales); desnormalización inversa para evaluar.
-- **SOMA** (All-To-One) para tasa de aprendizaje, capas y unidades ocultas, evaluando en el bloque final de train.
+- **SOMA:** el SOMA reducido usado hasta ahora (población 5, 3 migraciones, 3 hiperparámetros) no tiene fuente. Reproducir el de Makri (población 6, 100 migraciones, *path length* 4, paso 0,11, 8 hiperparámetros) costaría ~15 días por variante.
+- **Configuración fundamentada** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`): **no se vuelve a correr SOMA** y se adopta el óptimo que Makri obtuvo con SOMA (Tabla 6): 3 capas, 51 unidades, dropout 0, LR 3e-3, lote 16 y 150 épocas; sin weight decay ni recorte de gradiente. Repetir el SOMA con nuestros datos queda como mejora posible (camino 2).
 - **Bi-NOA-LSTM MIMO** con proyección densa final sin activación y salida directa. A1: un modelo por electrolizador; A2: un modelo conjunto. Sin máscara de saltos; MSE enmascarado solo en objetivos no válidos.
 - Salida: `models/modelo_A1.pt`, `models/modelo_A2.pt`, resultados de RFR-SHAP y SOMA en `reports/modelado/`.
 
 ### 06d — Propuestas C (ST-GRU) y D (TCN Multi-Output)
 - Serie real normalizada (Min-Max, train) sin filtro externo; huecos de entrada rellenados con el último valor anterior (causal).
 - **C:** grafo por electrolizador con las 2 vecinas en serie + las 4 celdas de mayor correlación en train; GCN espacial por día + GRU temporal por celda + cabezal lineal.
+  - **Configuración fundamentada** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`), Palan & N (2026):
+    - el módulo espacial pasa a ser una **GRU espacial que recorre las variables de cada día** (las celdas y la corriente en kA), seguida de una GRU temporal; se elimina el grafo, que era una interpretación propia;
+    - 512 unidades, 2 capas, LR 7,69e-4, dropout 0,2 y 90 épocas (Tabla 3);
+    - weight decay 0,01 (valor por defecto de AdamW, porque Palan no publica el suyo);
+    - lote justificado con una medición.
 - **D:** convolución de suavizado + bloques residuales causales dilatados (1, 2, 4, 8, 16) + capa densa multi-salida, un modelo por electrolizador.
+  - **Configuración fundamentada** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`):
+    - **4 bloques** (Palan, Tabla 4), que cubren 61 días;
+    - 64 canales, kernel 3 y dropout 0,2 (Palan); LR 1e-3 y lote 32 (Duan);
+    - sin weight decay ni recorte de gradiente, porque ninguna fuente los usa;
+    - early stopping con paciencia 20.
 - Sin máscara de saltos. Salida: `models/modelo_C.pt`, `models/modelo_D.pt`.
 
 ### 07 — Evaluación (CRISP-DM 5)
@@ -261,6 +293,12 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 ## DECISIONES
 - **Split 80/20 (se descartó 90/10):** se evaluó `VAL_FRACTION = 0.10` (train hasta 2025-12-25, validación de 243 días) y se decidió mantener 80/20, porque con 90/10 la validación bajaría a ~35 orígenes y ~10 con horizonte completo de 180 días (menos evidencia estadística), dominada por la intervención de jul-2026.
 - **Despliegue:** usar el modelo evaluado (entrenado con el 80 %); el reentrenamiento con todos los datos queda para el plan de reentrenamiento del notebook 08.
+- **Requisito de finalización** (`docs/metricas.md`): cumplir la Tabla 10 del OB2 / RNF-06 (MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en el horizonte completo y a 60 y 180 días, y superar a los modelos del Benchmarking en las 5 métricas. Los criterios C1–C4 son propios de la PoC y complementarios.
+- **Fundamentación de hiperparámetros (camino 1):** cada modelo del Benchmarking usa el óptimo que publica su fuente, citando la tabla, y se entrena una vez (~3–4 h en total).
+  - Repetir la búsqueda de cada autor con nuestros datos (camino 2, 40–55 h de GPU) queda como mejora posible.
+  - Limitación declarada: los óptimos se encontraron con los datos de cada autor.
+  - Nuestra Bi-LSTM mantiene los valores que coinciden con fuentes y solo busca los que no tienen fuente (ancla y embedding).
+  - Orden de trabajo: pruebas cortas → cambios de código → Silver/Gold → reentrenar todo → notebook 07 una sola vez → merge a `main` (`docs/hiperparametros.md`, sección 9).
 
 ## RIESGOS CONOCIDOS
 - **Datos de entrenamiento:** ~1935 días de train y ~484 de validación, con ~305 orígenes posibles para H=180, muy solapados. Hay pocas trayectorias independientes de 180 días.

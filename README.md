@@ -80,7 +80,7 @@ Los notebooks también pueden ejecutarse en **Google Colab**: detectan Colab, mo
 
 ```
 Poc-TP1/
-├── docs/                  # propuestas de modelos (Benchmarking), historias de usuario, prompt original
+├── docs/                  # propuestas de modelos (Benchmarking), historias de usuario, prompt original, criterios (metricas.md), fundamentación de hiperparámetros (hiperparametros.md), intentos de mejora
 ├── notebooks/             # 01–07 (CRISP-DM)
 ├── src/voltcast/          # código compartido
 │   ├── config.py          # rutas y parámetros
@@ -113,7 +113,11 @@ Poc-TP1/
 
 - Notebook 08 (despliegue): función `predecir(fecha, celda)`, exportación de pronósticos y plan de monitoreo y reentrenamiento.
 - Criterios comparativos abiertos (complementarios, no bloquean la finalización): C1 y C2 a 60 días, C3 a 180 días y C4. El error dominante son las intervenciones de mantenimiento, cuyo momento no se puede anticipar con los datos.
-- Búsqueda de hiperparámetros de la Bi-LSTM (la documentación prevé reajustarlos automáticamente si no se cumplen los criterios).
+- **Fundamentar todas las configuraciones** según [`docs/hiperparametros.md`](docs/hiperparametros.md):
+  - cada modelo del Benchmarking pasa a usar el óptimo que publica su fuente (camino 1);
+  - nuestra Bi-LSTM mantiene los valores que coinciden con fuentes y busca con una grilla chica el ancla y el embedding;
+  - antes de reentrenar se hacen las pruebas cortas de umbrales de limpieza y ventana (sección 8 del documento);
+  - después se reentrenan todos los modelos y se vuelve a ejecutar el notebook 07. Los resultados de este README van a cambiar.
 
 ## Decisiones
 
