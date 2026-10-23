@@ -15,14 +15,14 @@ Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de
 | 3 | Persistencia (referencia) | 0,0604 V | 0,0336 V | 0,0787 V |
 | 4 | ETS · Holt, método del pronóstico de Power BI (referencia) | 0,0678 V | 0,0316 V | 0,0951 V |
 | 5 | Tendencia lineal (referencia) | 0,1158 V | 0,0463 V | 0,1972 V |
-| 6 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1286 V | 0,0961 V | 0,1369 V |
-| 7 | C · ST-GRU (Benchmarking 2.º) | 0,1298 V | 0,1037 V | 0,1307 V |
+| 6 | C · ST-GRU (Benchmarking 2.º) | 0,1298 V | 0,1037 V | 0,1307 V |
+| 7 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1493 V | 0,1048 V | 0,1675 V |
 | 8 | A1 · modos BO-VMD + RFR-SHAP + Bi-NOA-LSTM, MIMO por electrolizador (Benchmarking 1.º) | 0,1803 V | 0,1311 V | 0,1620 V |
 | 9 | A2 · ídem, MIMO conjunto (Benchmarking 1.º) | 0,2003 V | 0,1524 V | 0,1870 V |
 
 - **Nuestras variantes son las mejores en todas las métricas y horizontes.** La Bi-LSTM supera a la persistencia en un 11 % de RMSE y un 29 % de MAE, y al mejor modelo del Benchmarking con significancia a 60 y 180 días.
 - **Frente a Power BI:** supera a ETS (Holt) en todas las métricas y horizontes, también con las otras formas de elegir sus parámetros (sección 4.1 del notebook 07).
-- **Los modelos del Benchmarking, implementados con la configuración que publican sus fuentes, quedan por detrás de los tres baselines.** Fallan ya a 1 día por un error de nivel: pronostican el voltaje absoluto y tiran hacia el nivel de train de cada celda. Se verificó reentrenando D relativo a un ancla: su error a 1 día baja de 0,116 a 0,016 V. El ranking empírico (D ≈ C > A) no coincide con el de la literatura (A > C > D).
+- **Los modelos del Benchmarking, implementados con la configuración que publican sus fuentes, quedan por detrás de los tres baselines.** Fallan ya a 1 día por un error de nivel: pronostican el voltaje absoluto y tiran hacia el nivel de train de cada celda. Se verificó reentrenando D relativo a un ancla: su error a 1 día baja de 0,127 a 0,016 V. El ranking empírico (C > D > A) no coincide con el de la literatura (A > C > D).
 - **Propuesta B descartada** (22-10-2026): la PoC compara las 3 propuestas mejor puntuadas del Benchmarking. B es la 4.ª y la peor en latencia, y fijar sus dos hiperparámetros sin fuente requería ~18 h de GPU ([`docs/hiperparametros.md`](docs/hiperparametros.md), 4.3).
 - **Requisito de finalización: cumplido.** La Bi-LSTM cumple los criterios de la documentación del proyecto (OB2 Tabla 10 / RNF-06: MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en todos los horizontes y supera a A1, A2, C y D en las 5 métricas; ninguno de ellos cumple el requisito (R² < 0). Ver [`docs/metricas.md`](docs/metricas.md).
 - **Criterios comparativos C1–C4** (complementarios): la Bi-LSTM cumple C1, C2 y C4 en todos los horizontes y C3 salvo a 180 días (94,7 % de las celdas con RMSE < 0,15 V, frente al 95 % pedido).

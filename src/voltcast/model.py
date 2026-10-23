@@ -202,14 +202,15 @@ class STGRU(nn.Module):
 
 
 class TCNBlock(nn.Module):
-    """Bloque residual del TCN: dos convoluciones causales dilatadas con ReLU y dropout; si cambia el número de
-    canales, la conexión residual usa una convolución 1×1 (TCN genérico de Bai et al., 2018)."""
+    """Bloque residual del TCN: dos convoluciones causales dilatadas con *weight normalization*, ReLU y dropout (Duan;
+    TCN genérico de Bai et al., 2018); si cambia el número de canales, la conexión residual usa una convolución 1×1."""
 
     def __init__(self, c_in: int, c_out: int, kernel: int, dilation: int, dropout: float):
         super().__init__()
         self.pad = (kernel - 1) * dilation  # relleno solo a la izquierda: convolución causal
-        self.c1 = nn.Conv1d(c_in, c_out, kernel, dilation=dilation)
-        self.c2 = nn.Conv1d(c_out, c_out, kernel, dilation=dilation)
+        wn = nn.utils.parametrizations.weight_norm
+        self.c1 = wn(nn.Conv1d(c_in, c_out, kernel, dilation=dilation))
+        self.c2 = wn(nn.Conv1d(c_out, c_out, kernel, dilation=dilation))
         self.down = nn.Conv1d(c_in, c_out, 1) if c_in != c_out else nn.Identity()
         self.drop = nn.Dropout(dropout)
 
