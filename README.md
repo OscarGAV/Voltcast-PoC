@@ -1,34 +1,32 @@
 # VoltCast — PoC de pronóstico de voltaje por celda
 
-Prueba de Concepto para pronosticar el **voltaje de cada celda** de los electrolizadores EL A y EL B (150 celdas por electrolizador en el dataset actual) con horizontes de **1 a 180 días**, comparando **nuestro modelo** con los 4 modelos mejor puntuados en un Benchmarking de la literatura y con 3 métodos de referencia, uno de ellos el método del pronóstico integrado de Power BI (ETS).
+Prueba de Concepto para pronosticar el **voltaje de cada celda** de los electrolizadores EL A y EL B (150 celdas por electrolizador en el dataset actual) con horizontes de **1 a 180 días**, comparando **nuestro modelo** con los 3 modelos mejor puntuados en un Benchmarking de la literatura y con 3 métodos de referencia, uno de ellos el método del pronóstico integrado de Power BI (ETS).
 
 El proyecto está organizado como una serie de notebooks según **CRISP-DM**, con los datos en **arquitectura Medallion** (Bronze → Silver → Gold). La especificación completa está en [`prompt.md`](prompt.md).
 
 ## Resultado principal
 
-Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de origen y ~2,9 millones de pronósticos, todos los modelos sobre los mismos objetivos y contra el voltaje real sin filtrar:
+Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de origen y ~2,7 millones de pronósticos, todos los modelos sobre los mismos objetivos y contra el voltaje **medido** (sin filtrar ni interpolar). Cada configuración de cada modelo tiene una fuente o una prueba con datos ([`docs/hiperparametros.md`](docs/hiperparametros.md)).
 
 | Puesto | Modelo | RMSE 1–180 d | MAE 1–180 d | RMSE 180 d |
 |---|---|---|---|---|
-| 1 | **Propio · Bi-LSTM** (modelo elegido) | **0,0585 V** | **0,0270 V** | 0,0691 V |
-| 2 | Propio · Bi-NOA-LSTM | 0,0601 V | 0,0274 V | **0,0689 V** |
-| 3 | Persistencia (referencia) | 0,0602 V | 0,0334 V | 0,0787 V |
-| 4 | ETS · Holt, método del pronóstico de Power BI (referencia) | 0,0694 V | 0,0323 V | 0,0962 V |
-| 5 | B · Seq2Seq BiLSTM + atención + Kalman (Benchmarking 4.º) | 0,0744 V | 0,0428 V | 0,1037 V |
-| 6 | C · ST-GRU (Benchmarking 2.º) | 0,0879 V | 0,0604 V | 0,0977 V |
-| 7 | A2 · BO-VMD + SOMA-Bi-NOA-LSTM, MIMO conjunto (Benchmarking 1.º) | 0,1143 V | 0,0892 V | 0,1112 V |
-| 8 | Tendencia lineal (referencia) | 0,1179 V | 0,0473 V | 0,1989 V |
-| 9 | A1 · BO-VMD + SOMA-Bi-NOA-LSTM, MIMO por electrolizador (Benchmarking 1.º) | 0,1186 V | 0,0892 V | 0,1130 V |
-| 10 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1487 V | 0,1038 V | 0,1651 V |
+| 1 | **Propio · Bi-LSTM** (modelo elegido) | **0,0535 V** | **0,0240 V** | **0,0679 V** |
+| 2 | Propio · Bi-NOA-LSTM | 0,0540 V | 0,0245 V | 0,0680 V |
+| 3 | Persistencia (referencia) | 0,0604 V | 0,0336 V | 0,0787 V |
+| 4 | ETS · Holt, método del pronóstico de Power BI (referencia) | 0,0678 V | 0,0316 V | 0,0951 V |
+| 5 | Tendencia lineal (referencia) | 0,1158 V | 0,0463 V | 0,1972 V |
+| 6 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1286 V | 0,0961 V | 0,1369 V |
+| 7 | C · ST-GRU (Benchmarking 2.º) | 0,1298 V | 0,1037 V | 0,1307 V |
+| 8 | A1 · modos BO-VMD + RFR-SHAP + Bi-NOA-LSTM, MIMO por electrolizador (Benchmarking 1.º) | 0,1803 V | 0,1311 V | 0,1620 V |
+| 9 | A2 · ídem, MIMO conjunto (Benchmarking 1.º) | 0,2003 V | 0,1524 V | 0,1870 V |
 
-- Nuestras variantes son las mejores en todas las métricas sobre el horizonte completo y, a 180 días, superan al mejor modelo del Benchmarking con significancia estadística. A 60 días la ventaja no es significativa y la persistencia queda levemente mejor en RMSE.
-- **Frente a Power BI:** nuestro modelo supera a ETS (Holt), el método de su pronóstico integrado, en todas las métricas y horizontes. ETS depende mucho de cómo se eligen sus parámetros: sin tendencia (β = 0) se comporta como una persistencia suavizada y, como ella, queda algo mejor que nuestro modelo en RMSE a 60 días (sección 4.1 del notebook 07).
-- Ningún modelo del Benchmarking supera a la persistencia; el ranking empírico (B > C > A > D) no coincide con el de la literatura (A > C > D > B).
-- **Intento de mejora (notebook 06e):** ensamble de 5 semillas y corrección por riesgo de intervención (las intervenciones se concentran en las celdas de mayor voltaje). Mejora apenas en validación (RMSE 1–180 0,0580 V; 60 días 0,0576 V) y no cierra ningún criterio, así que se mantiene la Bi-LSTM original. **La v2 es un intento descartado:** se va a quitar de la comparación del notebook 07 y queda solo como registro (notebook 06e y [`docs/intentos_mejora.md`](docs/intentos_mejora.md)).
-- **Límite:** el R² sobre el cambio de voltaje es ≈ 0 para todos los modelos. La ventaja de nuestro modelo es seguir mejor el nivel y la deriva de cada celda; ninguno anticipa los cambios individuales, dominados por las intervenciones de mantenimiento.
-
-- **Requisito de finalización: cumplido.** La Bi-LSTM cumple los criterios de la documentación del proyecto (OB2 Tabla 10 / RNF-06: MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en todos los horizontes y supera a los 5 modelos del Benchmarking en las 5 métricas. A1 y A2 (la propuesta ganadora del Benchmarking) y D no cumplen el requisito: su R² queda por debajo de 0. Ver [`docs/metricas.md`](docs/metricas.md).
-- **Criterios comparativos C1–C4** (propios de la PoC, complementarios): a 180 días nuestro modelo supera a los baselines y al mejor del Benchmarking con significancia; a 60 días no, por las intervenciones de mantenimiento (detalle en [`docs/intentos_mejora.md`](docs/intentos_mejora.md)).
+- **Nuestras variantes son las mejores en todas las métricas y horizontes.** La Bi-LSTM supera a la persistencia en un 11 % de RMSE y un 29 % de MAE, y al mejor modelo del Benchmarking con significancia a 60 y 180 días.
+- **Frente a Power BI:** supera a ETS (Holt) en todas las métricas y horizontes, también con las otras formas de elegir sus parámetros (sección 4.1 del notebook 07).
+- **Los modelos del Benchmarking, implementados con la configuración que publican sus fuentes, quedan por detrás de los tres baselines.** Fallan ya a 1 día (error de nivel, no de horizonte). El ranking empírico (D ≈ C > A) no coincide con el de la literatura (A > C > D).
+- **Propuesta B descartada** (22-10-2026): la PoC compara las 3 propuestas mejor puntuadas del Benchmarking. B es la 4.ª y la peor en latencia, y fijar sus dos hiperparámetros sin fuente requería ~18 h de GPU ([`docs/hiperparametros.md`](docs/hiperparametros.md), 4.3).
+- **Requisito de finalización: cumplido.** La Bi-LSTM cumple los criterios de la documentación del proyecto (OB2 Tabla 10 / RNF-06: MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en todos los horizontes y supera a A1, A2, C y D en las 5 métricas; ninguno de ellos cumple el requisito (R² < 0). Ver [`docs/metricas.md`](docs/metricas.md).
+- **Criterios comparativos C1–C4** (complementarios): la Bi-LSTM cumple C1, C2 y C4 en todos los horizontes y C3 salvo a 180 días (94,7 % de las celdas con RMSE < 0,15 V, frente al 95 % pedido).
+- **Límite:** las intervenciones de mantenimiento no se pueden anticipar con estos datos; los pronósticos que cruzan un salto de nivel (3,4 %) tienen error alto en todos los modelos. La v2 (notebook 06e) fue un intento de mejora descartado ([`docs/intentos_mejora.md`](docs/intentos_mejora.md)).
 
 Detalle, figuras y discusión: notebook [`07_evaluacion.ipynb`](notebooks/07_evaluacion.ipynb) y [`reports/metricas_comparativas.csv`](reports/metricas_comparativas.csv).
 
@@ -65,14 +63,14 @@ Abrir los notebooks con el kernel **VoltCast (.venv 3.13)** y ejecutarlos en ord
 | `02_ingesta_bronze` | 2 | Excel → Bronze sin transformar valores; valida el esquema | 10 s |
 | `03_comprension_datos` | 2 | Análisis exploratorio y reglas de calidad | 25 s |
 | `04_preparacion_silver` | 3 | Limpieza, máscara de calidad, saltos de nivel, split 80/20 | 15 s |
-| `05_preparacion_gold_bovmd` | 3 | BO-VMD (optimización bayesiana), filtrado causal, ancla y covariables | 2 min |
-| `05b_preparacion_gold_kalman` | 3 | Filtro de Kalman (para la Propuesta B) | 1 min |
-| `06_modelado` | 4 | **Nuestras variantes:** Bi-NOA-LSTM y Bi-LSTM | 8 min |
-| `06b_modelado_seq2seq_kalman` | 4 | Propuesta B: Seq2Seq + atención + ensamble con Kalman | 14 min |
-| `06c_modelado_propuesta_a` | 4 | Propuesta A (A1 y A2): RFR-SHAP + SOMA + Bi-NOA-LSTM MIMO | ~3 h (SOMA) |
-| `06d_modelado_stgru_tcn` | 4 | Propuestas C (ST-GRU) y D (TCN) | 8 min |
+| `05_preparacion_gold_bovmd` | 3 | BO-VMD de Makri por celda, modos y señal filtrada (train y causal), ancla y covariables | 1,5 h |
+| `05b_preparacion_gold_kalman` | 3 | Filtro de Kalman de Khan (solo registro: Propuesta B descartada) | 5 min |
+| `06_modelado` | 4 | **Nuestras variantes:** Bi-NOA-LSTM y Bi-LSTM | 10 min |
+| `06b_modelado_seq2seq_kalman` | 4 | Propuesta B (solo registro, descartada; no se ejecutó con la configuración final) | — |
+| `06c_modelado_propuesta_a` | 4 | Propuesta A (A1 y A2): modos BO-VMD + RFR-SHAP + Bi-NOA-LSTM MIMO con el óptimo de Makri | 2 h |
+| `06d_modelado_stgru_tcn` | 4 | Propuestas C (ST-GRU) y D (TCN) | 55 min |
 | `06e_mejora_modelo_propio` | 4 | **Intento descartado** (solo registro): ensamble de 5 semillas + riesgo de intervención, elegido con validación cruzada dentro de train | 30 min |
-| `07_evaluacion` | 5 | Comparación de los 10 modelos, ranking y conclusiones | 2 min |
+| `07_evaluacion` | 5 | Comparación de los 9 modelos, ranking y conclusiones | 10 min |
 
 Los notebooks también pueden ejecutarse en **Google Colab**: detectan Colab, montan Google Drive y buscan el proyecto en `MyDrive/Poc-TP1`.
 
@@ -91,7 +89,7 @@ Poc-TP1/
 │   ├── dataset.py         # ancla, ventanas y lotes en GPU
 │   ├── mimo.py            # Min-Max y matrices para los modelos MIMO / grafo / TCN
 │   ├── features.py        # RFR-SHAP
-│   ├── soma.py            # SOMA (optimización de hiperparámetros)
+│   ├── soma.py            # SOMA (no se usa: la Propuesta A adopta el óptimo publicado por Makri)
 │   ├── model.py           # celda NOA, Bi-NOA-LSTM, Seq2Seq, MIMO, ST-GRU, TCN, entrenamiento
 │   └── metrics.py         # métricas y baselines
 ├── data/                  # raw, bronze, silver, gold (local, no versionado)

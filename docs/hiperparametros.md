@@ -137,6 +137,8 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 
 ### 4.3 Propuesta B (Khan, Song, Gou)
 
+**Propuesta B descartada de la PoC (decisión del 22-10-2026).** La PoC compara las 3 propuestas mejor puntuadas del Benchmarking (A 5,00, C 4,00, D 3,90), con el mismo criterio de corte por puntaje que excluyó a E (2,30). B es la 4.ª (3,80) y la peor en latencia (3 puntos, 50–150 ms). Con nuestros datos se confirmó su costo: el decoder genera los 180 días uno por uno y cada entrenamiento tarda 17–32 min (frente a ~3 min de la Bi-LSTM propia); fijar sus dos hiperparámetros sin fuente (cabezas de atención y *teacher forcing*) con el protocolo del paso 3 requería ~18 h de GPU. Incluirla con esos valores puestos a mano contradiría la regla de fundamentar cada configuración. No se usa su resultado anterior en la PoC como motivo. Los notebooks 05b y 06b, `kalman.py` y esta tabla quedan como registro.
+
 | Parámetro | Inicial | Cómo queda | Marca |
 |---|---|---|---|
 | Unidades del encoder / decoder | 64 / 128 | 32 / 64: Gou et al. (2024), la fuente de la arquitectura Seq2Seq con atención que cita Khan | F |
@@ -377,6 +379,14 @@ Se cambió **un factor por vez** respecto de la base; cuando el ganador quedó e
 
 **Sobre el umbral de 0,03 V:** está por debajo de la variación normal de 7 días (el 99 % de las diferencias es menor que 0,037 V), así que la máscara de entrenamiento también marca variaciones chicas, no solo intervenciones. Se adopta porque es el de menor error. Su efecto se limita a la máscara de entrenamiento: no cambia las entradas, los objetivos de evaluación ni las métricas. **Decisión:** la regla R9 cumple dos funciones con umbrales distintos. (1) **Máscara de entrenamiento: 0,03 V** (menor error). (2) **Diagnóstico de la evaluación** (separar los objetivos que cruzan una intervención): **0,10 V**. Acá no aplica el criterio de menor error, porque no es una predicción, y 0,03 V marcaría como intervenciones variaciones que están dentro del ruido normal. 0,10 V se justifica con el análisis de los datos (sección 6.2): sin intervenciones, el 99 % de las diferencias de mediana a 7 días es menor que 0,037 V y solo el 0,03 % supera +0,10 V. **Sensibilidad (hecha, en los bloques de train):** con 0,07, 0,10 y 0,15 V cambia la porción marcada como "cruza una intervención" (F1: 6,8 / 6,5 / 6,2 %; F2: 2,6 / 2,4 / 1,7 %; F3: 0,7 / 0,3 / 0,15 %), pero la comparación Bi-LSTM frente a persistencia en cada subconjunto es la misma con los tres umbrales. **0,10 V queda justificado como insensible** dentro de la zona de transición entre el ruido (hasta ~0,06 V) y las intervenciones (desde ~0,2 V).
 
+**Etapa 4: VMD causal y reentrenamiento final** (base: la configuración que surge de la etapa 3)
+
+| Factor | Valores probados (RMSE relativo a la base, ± error estándar) | Decisión |
+|---|---|---|
+| Historia del VMD causal (`VMD_HISTORY`) | 180: 0,99996 ± 0,00001 · 365: 1,0000 · **730: 0,99995 ± 0,00002** | **730 días** (menor error). Los tres son equivalentes: la diferencia es de ~0,005 %, decenas de veces menor que el error estándar entre semillas de las demás pruebas. 730 quedó en el borde, pero **la grilla no se extiende**: la respuesta es plana en un rango de 4 veces (180 a 730 días) y probar 1460 días costaría ~6 h de CPU. El 97–99 % de los orígenes tiene un tramo en servicio de más de 730 días, así que la historia sí llega a usarse |
+| Segmento mínimo para VMD (`VMD_MIN_LEN`) | 30, **60**, 120: predicciones idénticas | **60 (se mantiene).** En train no hay tramos en servicio de entre 30 y 120 días, así que los modos de entrenamiento son los mismos; solo cambia cuántos orígenes se pueden pronosticar poco después de un rearranque (con 30 días, 0,1–0,5 % más objetivos; con 120, menos). Ante un empate se mantiene el valor actual |
+| Reentrenar con todo train tras el early stopping (`REFIT_FULL_TRAIN`) | sin reentrenar: 1,0000 · **reentrenando: 0,9789 ± 0,0029** | **Sí** (−2,1 %). Mejora en F1 y F3 y empeora levemente en F2 (0,0452 frente a 0,0449 V). Las épocas que elige el early stopping varían mucho entre bloques (F1: 5–8; F2: 1; F3: 40–99) |
+
 **Limitación del banco de pruebas:** todas las configuraciones se entrenan 45 épocas fijas (las que eligió el early stopping de la configuración anterior). Una configuración podría necesitar más o menos épocas; en el entrenamiento final, las épocas se eligen con early stopping (paciencia 20).
 
 ---
@@ -448,7 +458,7 @@ El orden importa porque cada paso cambia los datos que usa el siguiente: las pru
 6. **Ejecutar de nuevo el notebook 07, una sola vez**, y actualizar el README, `docs/metricas.md` y `docs/intentos_mejora.md`.
 7. Merge a `main`.
 
-**Tiempo estimado:** se actualiza al cerrar el inventario de la sección 10 (las pruebas de limpieza con el criterio de menor error suman ~2 h).
+**Estado (22-10-2026): pasos 1 a 6 hechos.** La prueba de cabezas de B no se hizo porque la Propuesta B se descartó (sección 4.3); 06b no se reentrenó. El notebook 07 se ejecutó una vez con los 9 modelos restantes.
 
 ---
 

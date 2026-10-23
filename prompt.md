@@ -225,11 +225,13 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 - Salida: `models/bi_noa_lstm.pt`, `models/bi_lstm_baseline.pt` (pesos, config, escaladores, versión) y curvas de entrenamiento en `reports/`.
 
 ### 05b — Preparación Gold: filtro de Kalman (Propuesta B)
+- **Descartada de la PoC** (22-10-2026; `docs/hiperparametros.md` 4.3): el notebook queda como registro y no entra en la comparación del 07.
 - Modelo de nivel y tendencia local; varianzas por máxima verosimilitud **solo con train** (reiniciando el filtro en saltos y arranques solo para estimar).
 - **Configuración de Khan et al. (2026)** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`): estado `[nivel, velocidad, aceleración]`. La estimación de las varianzas por máxima verosimilitud se mantiene (Khan las ajusta con ATPE); falta citar un libro de referencia de modelos de espacio de estados.
 - Filtro causal sobre la serie completa (no requiere recalcular por origen). Salida: `data/gold/series_kalman.parquet` (nivel y pendiente), `data/gold/escaladores_kalman.json`, `models/kalman_params.json`.
 
 ### 06b — Propuesta B: Seq2Seq BiLSTM + atención + Kalman
+- **Descartada de la PoC** (22-10-2026; `docs/hiperparametros.md` 4.3): el notebook queda como registro y no entra en la comparación del 07.
 - Encoder BiLSTM, decoder LSTM con atención multi-cabeza y **decodificación paso a paso** (Gou et al., 2024), sobre la señal de Kalman. Una semilla (`SEED`), sin máscara de saltos.
 - **Ensamble neuro-estocástico** (Khan et al., 2026): `V̂ = α · V̂_red + (1 − α) · V̂_Kalman`, con `V̂_Kalman = nivel + pendiente · h` y `α ∈ [0,3; 0,7]` elegido en el bloque final de train.
 - **Configuración fundamentada** (pendiente de aplicar en `feature/test`; ver `docs/hiperparametros.md`), sección 4.3:
@@ -291,6 +293,8 @@ EDA sobre Bronze, con figuras guardadas en `reports/eda/`:
 ---
 
 ## DECISIONES
+
+- **22-10-2026 — Propuesta B descartada:** la PoC compara A, C y D (las 3 mejor puntuadas del Benchmarking). B es 4.ª (3,80), la peor en latencia, y fijar sus hiperparámetros sin fuente requería ~18 h de GPU (`docs/hiperparametros.md` 4.3).
 - **Split 80/20 (se descartó 90/10):** se evaluó `VAL_FRACTION = 0.10` (train hasta 2025-12-25, validación de 243 días) y se decidió mantener 80/20, porque con 90/10 la validación bajaría a ~35 orígenes y ~10 con horizonte completo de 180 días (menos evidencia estadística), dominada por la intervención de jul-2026.
 - **Despliegue:** usar el modelo evaluado (entrenado con el 80 %); el reentrenamiento con todos los datos queda para el plan de reentrenamiento del notebook 08.
 - **Requisito de finalización** (`docs/metricas.md`): cumplir la Tabla 10 del OB2 / RNF-06 (MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en el horizonte completo y a 60 y 180 días, y superar a los modelos del Benchmarking en las 5 métricas. Los criterios C1–C4 son propios de la PoC y complementarios.

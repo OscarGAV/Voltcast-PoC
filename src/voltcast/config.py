@@ -77,14 +77,14 @@ STEP_THRESHOLD_MASK = 0.03  # salto de nivel (V) para la máscara de entrenamien
 STEP_WINDOW_DAYS = 7  # días de mediana antes/después para detectar un salto
 BO_TRIALS = 30  # evaluaciones de la BO-VMD por celda (Makri et al., 2026)
 EVAL_STRIDE = 7  # días entre orígenes de validación (rolling-origin)
-VMD_HISTORY = 365  # días de historia usados para VMD causal en validación/inferencia
-VMD_MIN_LEN = 60  # segmento en servicio mínimo (días) para aplicar VMD
+VMD_HISTORY = 730  # historia del VMD causal: menor error en {180, 365, 730}, equivalentes (docs/hiperparametros.md 6.4)
+VMD_MIN_LEN = 60  # segmento mínimo para VMD: 30, 60 y 120 dan las mismas predicciones (6.4); se mantiene
 N_JOBS = -1  # procesos de joblib (-1 = todos los núcleos)
 COV_CLIP = 5.0  # |z| máximo de las covariables estandarizadas
 USE_NOA = True  # True = Bi-NOA-LSTM; False = nn.LSTM estándar (ablación)
 MASK_POST_JUMP = True  # enmascarar en el loss los objetivos posteriores a un salto de nivel (histórico de train)
 ES_BLOCK_DAYS = 270  # último bloque de train usado para early stopping
-REFIT_FULL_TRAIN = True  # tras el early stopping, reentrenar con todo train durante las épocas elegidas
+REFIT_FULL_TRAIN = True  # reentrenar con todo train tras el early stopping: −2,1 % de RMSE (prueba, 6.4)
 TRAIN = {
     "hidden": 64, "layers": 1, "emb_dim": 8, "head_hidden": 256, "dropout": 0.2,
     "batch_size": 1024, "lr": 1e-3, "weight_decay": 1e-4, "clip": None,

@@ -2,6 +2,8 @@
 
 Objetivo: cerrar los criterios de `docs/metricas.md` que quedan abiertos para la Bi-LSTM (C1 y C2 a 60 días, C3 a 180 días, C4).
 
+> **Actualización (22-10-2026).** Este registro corresponde a la versión anterior del modelo. Con la configuración fundamentada del paso 3 (`docs/hiperparametros.md` 6.4: ventana de 5 días, ancla de 3, señal sin 3 modos, máscara de saltos de 0,03 V, reentrenamiento con todo train), la Bi-LSTM reentrenada **cumple C1, C2 y C4 en todos los horizontes** y C3 salvo a 180 días (94,7 % de las celdas). Su RMSE 1–180 es 0,0535 V. No es comparable con las cifras de abajo, porque la evaluación ahora usa solo voltajes medidos como objetivo.
+
 **Protocolo.** Todo cambio se evalúa primero con validación cruzada temporal dentro de train (bloques F1 2022-07 → 2023-06, F2 2023-07 → 2024-07 y F3 = últimos 270 días de train; ver notebook `06e`). En cada bloque, el modelo se entrena solo con orígenes y objetivos anteriores al bloque, con VMD causal y contra el voltaje real. La validación del notebook 07 se usa una sola vez por candidato.
 
 ## Diagnóstico
