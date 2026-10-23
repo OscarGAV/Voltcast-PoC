@@ -170,6 +170,8 @@ Son problemas de la configuración con la que se entrenaron los modelos hasta ah
 
 ### 4.5 Propuesta D (Duan, Palan)
 
+**Diagnóstico del error de nivel (22-10-2026, no cambia la comparación).** A, C y D fallan ya a 1 día en validación. Para verificar la causa, D se reentrenó con la misma configuración pero con entrada y objetivo relativos al ancla (media de los últimos 3 días, como nuestro modelo): RMSE a 1 día 0,116 → 0,016 V, RMSE 1–180 días 0,129 → 0,064 V (persistencia 0,060 V). En D tal cual, el error a 1 día tiene correlación −0,56 con la distancia entre V(t0) y la media de train de la celda; en la versión relativa, 0,02. Conclusión: el error de nivel se debe a pronosticar el voltaje absoluto. En la PoC, D se evalúa como lo publica su fuente; la versión relativa solo es evidencia del diagnóstico (script en el banco de pruebas, `v_ancla_bench.py`).
+
 | Parámetro | Inicial | Cómo queda | Marca |
 |---|---|---|---|
 | Canales / kernel / dropout | 64 / 3 / 0,2 | Igual: Palan (Tabla 4) | F |
