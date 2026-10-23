@@ -2,6 +2,8 @@
 
 Objetivo: cerrar los criterios de `docs/metricas.md` que quedan abiertos para la Bi-LSTM (C1 y C2 a 60 días, C3 a 180 días, C4).
 
+> **Actualización (22-10-2026).** Este registro corresponde a la versión anterior del modelo. Con la configuración fundamentada del paso 3 (`docs/hiperparametros.md` 6.4: ventana de 5 días, ancla de 3, señal sin 3 modos, máscara de saltos de 0,03 V, reentrenamiento con todo train), la Bi-LSTM reentrenada **cumple C1, C2 y C4 en todos los horizontes** y C3 salvo a 180 días (94,7 % de las celdas). Su RMSE 1–180 es 0,0535 V. No es comparable con las cifras de abajo, porque la evaluación ahora usa solo voltajes medidos como objetivo.
+
 **Protocolo.** Todo cambio se evalúa primero con validación cruzada temporal dentro de train (bloques F1 2022-07 → 2023-06, F2 2023-07 → 2024-07 y F3 = últimos 270 días de train; ver notebook `06e`). En cada bloque, el modelo se entrena solo con orígenes y objetivos anteriores al bloque, con VMD causal y contra el voltaje real. La validación del notebook 07 se usa una sola vez por candidato.
 
 ## Diagnóstico
@@ -14,8 +16,8 @@ Objetivo: cerrar los criterios de `docs/metricas.md` que quedan abiertos para la
 
 | Intento | Validación cruzada (train) | Validación (07) | Estado |
 |---|---|---|---|
-| Ensamble de 5 semillas | Mejora pequeña y estable (≈ −1 % RMSE) | — (incluido en la v2) | Adoptado en la v2 |
-| Corrección por riesgo de intervención (λ = 0,05) | Las intervenciones se concentran en el 10 % de celdas de mayor voltaje (67 % de los saltos). Con λ = 1 multiplica el error en bloques sin campañas; λ = 0,05 mejora −2,3 % / −3,2 % / +0,3 % | Bi-LSTM v2: RMSE 1–180 0,0580 V (vs 0,0585), 60 d 0,0576 V (persistencia 0,0574), 180 d 0,0703 V (vs 0,0691). No cierra ningún criterio y pierde C4 a 180 d | Descartado como modelo elegido (en `main`, notebook 06e) |
+| Ensamble de 5 semillas | Mejora pequeña y estable (≈ −1 % RMSE) | — (incluido en la v2) | Descartado junto con la v2 |
+| Corrección por riesgo de intervención (λ = 0,05) | Las intervenciones se concentran en el 10 % de celdas de mayor voltaje (67 % de los saltos). Con λ = 1 multiplica el error en bloques sin campañas; λ = 0,05 mejora −2,3 % / −3,2 % / +0,3 % | Bi-LSTM v2: RMSE 1–180 0,0580 V (vs 0,0585), 60 d 0,0576 V (persistencia 0,0574), 180 d 0,0703 V (vs 0,0691). No cierra ningún criterio y pierde C4 a 180 d | **Intento descartado:** se quita de la comparación de la PoC; el notebook 06e queda como registro |
 | Entrenar con ventanas VMD **causales** (como en la inferencia) | 60 d peor en los 3 bloques (F1 0,1277 vs 0,1250; F2 0,0445 vs 0,0439; F3 0,0199 vs 0,0194); 180 d algo mejor | No evaluado | Rechazado |
 | Combinación con la persistencia `w·modelo + (1 − w)·y(t0)` | Ganancia ≤ 0,9 % a 60 d (dentro del ruido entre semillas); el peso óptimo por horizonte cambia de signo entre bloques | No evaluado | Rechazado |
 | Riesgo con el *cuándo*: probabilidad de campaña según los días desde la última campaña del electrolizador | F1 −11 %, pero F2 ×1,3 y F3 ×1,6 a ×5 (en F3 pasaron 9 meses sin campaña, más que cualquier intervalo previo) | No evaluado | Rechazado |

@@ -9,7 +9,8 @@ from .io import DATE_COL, KA_COL, VOLTS_COL
 
 # Códigos de calidad, de menor a mayor precedencia al asignarlos
 CALIDAD = ["ok", "interpolado", "hueco", "atipico", "paro", "fuera_servicio"]
-CALIDAD_VALIDA = ["ok", "interpolado"]  # fechas usadas en métricas
+CALIDAD_VALIDA = ["ok", "interpolado"]  # entradas del modelo (ventanas sin agujeros) y detección de saltos (R9)
+CALIDAD_OBJETIVO = ["ok"]  # objetivos y métricas: solo voltajes medidos (docs/hiperparametros.md, 6.2)
 
 
 def cell_name(el: str, n: int | str) -> str:

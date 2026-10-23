@@ -1,7 +1,7 @@
 
 ## Criterios de evaluación del modelo
 
-Todas las métricas se calculan **en voltios por celda**, desnormalizando cada modelo y comparando contra el **voltaje real sin filtrar** del período de validación (fuera de muestra), solo en fechas con dato válido. Se reportan sobre el horizonte completo (1–180 días) y en los cortes de **60 y 180 días**.
+Todas las métricas se calculan **en voltios por celda**, desnormalizando cada modelo y comparando contra el **voltaje real sin filtrar** del período de validación (fuera de muestra), solo en fechas con voltaje **medido** (calidad `ok`): los valores interpolados se usan como entrada del modelo, pero no como objetivo ni en las métricas (`docs/hiperparametros.md`, sección 6.2). Se reportan sobre el horizonte completo (1–180 días) y en los cortes de **60 y 180 días**.
 
 ### 1. Requisito de la documentación del proyecto (OB2 – Diseño de Arquitectura, Tabla 10 y RNF-06)
 
@@ -23,7 +23,7 @@ Son los criterios de evaluación del modelo definidos en la documentación del p
 
 La PoC se considera finalizada cuando un modelo propio:
 1. cumple todos los criterios de la sección 1 en el horizonte completo (1–180 días) y a 60 y 180 días; y
-2. supera a los modelos del Benchmarking (A1, A2, B, C y D) en MAE, MSE, RMSE, MAPE y R², evaluados en las mismas condiciones (mismo split 80/20, mismos objetivos, voltaje real sin filtrar).
+2. supera a los modelos del Benchmarking (A1, A2, C y D; la Propuesta B quedó fuera de la PoC, `docs/hiperparametros.md` 4.3) en MAE, MSE, RMSE, MAPE y R², evaluados en las mismas condiciones (mismo split 80/20, mismos objetivos, voltaje real sin filtrar).
 
 ### 2. Criterios comparativos (propios de la PoC, complementarios)
 
@@ -42,3 +42,9 @@ Las métricas se reportan además por separado para los pronósticos que **cruza
 
 - Notebook `notebooks/07_evaluacion.ipynb`, sección 10 (*Cumplimiento de los criterios de `docs/metricas.md`*).
 - Resultados por modelo y horizonte: `reports/evaluacion/cumplimiento_metricas.csv`; métricas completas: `reports/metricas_comparativas.csv`.
+
+### 4. Resultado (evaluación del 22-10-2026, configuración fundamentada)
+
+- **Requisito de finalización: cumplido** por la Bi-LSTM propia (y la Bi-NOA-LSTM) en 1–180, 60 y 180 días. Ningún modelo del Benchmarking cumple la sección 1 (R² < 0).
+- **C1, C2 y C4:** cumplidos en los tres horizontes.
+- **C3:** cumplido en 1–180 días (98,7 % de las celdas) y a 60 días (97,0 %); **no a 180 días (94,7 %)**.

@@ -62,18 +62,20 @@ def scaled_inputs(cells: np.ndarray, covs: np.ndarray | None, cell_scaler: MinMa
 
 
 def covariate_matrix(selec: list[str], cov_por_el: dict, cal: pd.DataFrame, electrolizadores: list[str]) -> np.ndarray:
-    """Covariables de la Propuesta A en el orden usado al entrenar: por electrolizador [kA_z, vcel_z] (las
-    seleccionadas por RFR-SHAP) y luego el calendario [doy_sin, doy_cos, dow_sin, dow_cos] seleccionado.
+    """Covariables de la Propuesta A en el orden usado al entrenar: por electrolizador ``kA_z`` y ``vcel_z`` (las
+    elegidas por RFR-SHAP) y luego las variables de calendario elegidas (``doy_sin``, ``doy_cos``, ``dow_sin``, ``dow_cos``).
 
     ``cov_por_el[el]``: DataFrame con columnas ``kA_z`` y ``vcel_z``; ``cal``: ``calendar_features``.
     """
-    cols = []
-    for el in electrolizadores:
-        if "kA" in selec:
-            cols.append(cov_por_el[el]["kA_z"].to_numpy())
-        if "vcel" in selec:
-            cols.append(cov_por_el[el]["vcel_z"].to_numpy())
-    for g, nombres in (("doy", ["doy_sin", "doy_cos"]), ("dow", ["dow_sin", "dow_cos"])):
-        if g in selec:
-            cols += [cal[n].to_numpy() for n in nombres]
+    cols = [cov_por_el[el][v].to_numpy() for el in electrolizadores for v in ("kA_z", "vcel_z") if v in selec]
+    cols += [cal[v].to_numpy() for v in cal.columns if v in selec]
     return np.column_stack(cols) if cols else np.zeros((len(cal), 0))
+
+
+def modes_matrix(modes: np.ndarray, sel_modes: list[int]) -> np.ndarray:
+    """Modos VMD elegidos de cada celda: ``modes [..., N, K]`` → ``[..., N · len(sel_modes)]`` (celda por celda).
+
+    ``sel_modes`` son números de modo desde 1 (1 = el de menor frecuencia).
+    """
+    m = modes[..., [k - 1 for k in sel_modes]]
+    return m.reshape(*m.shape[:-2], -1)

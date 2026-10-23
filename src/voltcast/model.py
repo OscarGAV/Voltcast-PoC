@@ -74,7 +74,7 @@ class BiNOALSTM(nn.Module):
 class VoltCastNet(nn.Module):
     """Canal independiente con pesos compartidos: ventana ``[B, L, F]`` de una celda → ``[B, H]`` (y normalizado).
 
-    Cabezal: concat(h_final, embedding de celda, flag EL) → Linear → GELU → Linear(→ H), sin activación de salida.
+    Cabezal: concat(h_final, embedding de celda, flag EL) → Linear → ReLU → Linear(→ H), sin activación de salida.
     ``use_noa=False`` usa ``nn.LSTM(bidirectional=True)`` (ablación).
     """
 
@@ -92,7 +92,7 @@ class VoltCastNet(nn.Module):
         self.head = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(2 * hidden + emb_dim + 1, head_hidden),
-            nn.GELU(),
+            nn.ReLU(),  # ReLU en las capas densas, como Song et al. (2025) y Gou et al. (2024)
             nn.Dropout(dropout),
             nn.Linear(head_hidden, horizon),
         )
@@ -111,15 +111,17 @@ class VoltCastNet(nn.Module):
 class Seq2SeqAttention(nn.Module):
     """Propuesta B: encoder BiLSTM + decoder LSTM con atención multi-cabeza, **autorregresivo paso a paso**.
 
-    El decoder genera ``ŷ_{t0+1} … ŷ_{t0+H}`` realimentando su propia predicción (sin teacher forcing), así que
-    el error puede acumularse con el horizonte (deriva por recursión), a diferencia de ``VoltCastNet``.
+    El decoder genera ``ŷ_{t0+1} … ŷ_{t0+H}`` realimentando su propia predicción, así que el error puede acumularse
+    con el horizonte (deriva por recursión), a diferencia de ``VoltCastNet``. Con ``teacher_forcing``, en
+    entrenamiento cada paso recibe el valor real anterior (donde no hay valor medido, la propia predicción).
     """
 
     def __init__(self, n_cells: int, n_features: int, hidden: int = 64, dec_hidden: int = 128, heads: int = 4,
-                 emb_dim: int = 8, dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
+                 emb_dim: int = 8, dropout: float = 0.2, horizon: int = config.HORIZON_DAYS,
+                 teacher_forcing: bool = False):
         super().__init__()
         d = 2 * hidden
-        self.horizon = horizon
+        self.horizon, self.teacher_forcing = horizon, teacher_forcing
         self.encoder = nn.LSTM(n_features, hidden, batch_first=True, bidirectional=True)
         self.emb = nn.Embedding(n_cells, emb_dim)
         self.init_h = nn.Linear(d + emb_dim + 1, dec_hidden)
@@ -132,9 +134,10 @@ class Seq2SeqAttention(nn.Module):
         self.o = nn.Linear(d, d)
         self.decoder = nn.LSTMCell(1 + d, dec_hidden)
         self.drop = nn.Dropout(dropout)
-        self.out = nn.Sequential(nn.Linear(dec_hidden + d, dec_hidden), nn.GELU(), nn.Linear(dec_hidden, 1))
+        self.out = nn.Linear(dec_hidden + d, 1)  # una capa totalmente conectada sobre [estado, contexto]: Gou et al. (2024), ec. 14
 
-    def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor) -> Tensor:
+    def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor, y_real: Tensor | None = None,
+                mask: Tensor | None = None) -> Tensor:
         enc, (h_n, _) = self.encoder(x)  # [B, L, d]
         z = self.drop(torch.cat([h_n[-2], h_n[-1], self.emb(cell), el_flag.unsqueeze(-1)], dim=-1))
         h, c = torch.tanh(self.init_h(z)), self.init_c(z)
@@ -144,13 +147,15 @@ class Seq2SeqAttention(nn.Module):
         escala = self.dh ** -0.5
         y = x[:, -1, :1]  # último voltaje relativo al ancla
         outs = []
-        for _ in range(self.horizon):
+        for k in range(self.horizon):
             q = self.q(h).view(B, self.heads, 1, self.dh)
             w = torch.softmax(q @ K.transpose(-1, -2) * escala, dim=-1)  # [B, heads, 1, L]
             ctx = self.o((w @ V).reshape(B, d))
             h, c = self.decoder(torch.cat([y, ctx], dim=-1), (h, c))
             y = self.out(self.drop(torch.cat([h, ctx], dim=-1)))
             outs.append(y)
+            if y_real is not None:  # teacher forcing: el paso siguiente recibe el valor real
+                y = torch.where(mask[:, k:k + 1], y_real[:, k:k + 1], y)
         return torch.cat(outs, dim=1)
 
 
@@ -174,65 +179,62 @@ class MIMOBiNOALSTM(nn.Module):
 
 
 class STGRU(nn.Module):
-    """Propuesta C: ST-GRU. En cada día, una convolución de grafo (GCN) mezcla cada celda con sus vecinas
-    (componente espacial); después una GRU recorre los ``L`` días de cada celda (componente temporal), con pesos
-    compartidos entre celdas; un cabezal lineal proyecta los ``H`` días de cada nodo.
+    """Propuesta C: ST-GRU (Palan et al.). En cada día, una **GRU espacial** recorre las variables de ese día como una
+    secuencia (las celdas y kA) y su último estado es la representación del día; una **GRU temporal** recorre esas
+    representaciones de los ``L`` días; su último estado pasa por ReLU y una capa densa que proyecta ``[B, H, n_out]``.
 
-    Entrada ``[B, L, N, F]``; ``cell`` = índice del grafo (electrolizador) de cada muestra. Salida ``[B, H, N]``.
+    Entrada ``[B, L, F]``; las dos GRU tienen ``hidden`` unidades y ``layers`` capas (Palan, Tablas 3 y 4).
     """
 
-    def __init__(self, adjacency: Tensor, n_features: int, gcn_dim: int = 32, hidden: int = 64,
-                 dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
+    def __init__(self, n_in: int, n_out: int, hidden: int = 512, layers: int = 2, dropout: float = 0.2,
+                 horizon: int = config.HORIZON_DAYS):
         super().__init__()
-        self.register_buffer("A", adjacency)  # [G, N, N] normalizada: D^-1/2 (A + I) D^-1/2
-        self.gcn1 = nn.Linear(n_features, gcn_dim)
-        self.gcn2 = nn.Linear(gcn_dim, gcn_dim)
-        self.gru = nn.GRU(gcn_dim, hidden, batch_first=True)
-        self.drop = nn.Dropout(dropout)
-        self.head = nn.Linear(hidden, horizon)
+        self.n_out, self.horizon = n_out, horizon
+        self.spatial = nn.GRU(1, hidden, layers, batch_first=True, dropout=dropout)
+        self.temporal = nn.GRU(hidden, hidden, layers, batch_first=True, dropout=dropout)
+        self.head = nn.Linear(hidden, horizon * n_out)
 
-    def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor | None = None) -> Tensor:
-        B, L, N, _ = x.shape
-        A = self.A[cell].unsqueeze(1)  # [B, 1, N, N]
-        z = torch.relu(A @ self.gcn1(x))  # [B, L, N, gcn]
-        z = torch.relu(A @ self.gcn2(z))
-        z = z.permute(0, 2, 1, 3).reshape(B * N, L, -1)  # cada celda como una secuencia
-        _, h = self.gru(z)
-        out = self.head(self.drop(h[-1])).view(B, N, -1)
-        return out.transpose(1, 2)
+    def forward(self, x: Tensor, cell: Tensor | None = None, el_flag: Tensor | None = None) -> Tensor:
+        B, L, F = x.shape
+        _, h = self.spatial(x.reshape(B * L, F, 1))  # cada día: secuencia de sus F variables
+        _, h = self.temporal(h[-1].view(B, L, -1))
+        return self.head(torch.relu(h[-1])).view(B, self.horizon, self.n_out)
 
 
 class TCNBlock(nn.Module):
-    def __init__(self, ch: int, kernel: int, dilation: int, dropout: float):
+    """Bloque residual del TCN: dos convoluciones causales dilatadas con ReLU y dropout; si cambia el número de
+    canales, la conexión residual usa una convolución 1×1 (TCN genérico de Bai et al., 2018)."""
+
+    def __init__(self, c_in: int, c_out: int, kernel: int, dilation: int, dropout: float):
         super().__init__()
         self.pad = (kernel - 1) * dilation  # relleno solo a la izquierda: convolución causal
-        self.c1 = nn.Conv1d(ch, ch, kernel, dilation=dilation)
-        self.c2 = nn.Conv1d(ch, ch, kernel, dilation=dilation)
+        self.c1 = nn.Conv1d(c_in, c_out, kernel, dilation=dilation)
+        self.c2 = nn.Conv1d(c_out, c_out, kernel, dilation=dilation)
+        self.down = nn.Conv1d(c_in, c_out, 1) if c_in != c_out else nn.Identity()
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x: Tensor) -> Tensor:
         y = self.drop(torch.relu(self.c1(nn.functional.pad(x, (self.pad, 0)))))
         y = self.drop(torch.relu(self.c2(nn.functional.pad(y, (self.pad, 0)))))
-        return torch.relu(x + y)  # conexión residual
+        return torch.relu(self.down(x) + y)  # conexión residual
 
 
 class TCNMultiOutput(nn.Module):
-    """Propuesta D: TCN multi-salida. Canales de entrada = celdas + covariables ``[B, L, n_in]``; convolución de
-    suavizado inicial, bloques residuales causales dilatados (1, 2, 4, 8, 16: campo receptivo > 30 días) y una
-    capa densa que proyecta en paralelo ``[B, H, n_out]``.
+    """Propuesta D: TCN multi-salida. Canales de entrada = celdas + covariables ``[B, L, n_in]``; bloques residuales
+    causales dilatados (1, 2, 4, 8: con kernel 3 el campo receptivo es de 61 días, más que la ventana) y una capa
+    densa que proyecta en paralelo ``[B, H, n_out]`` (Duan; Palan, Tabla 4: 64 canales, kernel 3, 4 capas).
     """
 
     def __init__(self, n_in: int, n_out: int, channels: int = 64, kernel: int = 3,
-                 dilations: tuple = (1, 2, 4, 8, 16), dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
+                 dilations: tuple = (1, 2, 4, 8), dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
         super().__init__()
         self.n_out, self.horizon = n_out, horizon
-        self.smooth = nn.Conv1d(n_in, channels, 5, padding=0)
-        self.blocks = nn.Sequential(*[TCNBlock(channels, kernel, d, dropout) for d in dilations])
+        self.blocks = nn.Sequential(*[TCNBlock(n_in if i == 0 else channels, channels, kernel, d, dropout)
+                                      for i, d in enumerate(dilations)])
         self.head = nn.Linear(channels, horizon * n_out)
 
     def forward(self, x: Tensor, cell: Tensor | None = None, el_flag: Tensor | None = None) -> Tensor:
-        z = self.smooth(nn.functional.pad(x.transpose(1, 2), (4, 0)))  # [B, C, L] causal
-        z = self.blocks(z)[:, :, -1]  # representación en t0
+        z = self.blocks(x.transpose(1, 2))[:, :, -1]  # representación en t0
         return self.head(z).view(-1, self.horizon, self.n_out)
 
 
@@ -271,9 +273,13 @@ def masked_mse(pred: Tensor, y: Tensor, mask: Tensor) -> Tensor:
     return ((pred - y) ** 2 * m).sum() / m.sum().clamp(min=1.0)
 
 
-def run_epoch(model, data, c, t, target_limit: int, batch_size: int, opt=None, clip: float = 1.0,
-              generator=None, mask_jumps: bool = False) -> tuple[float, int]:
-    """Una pasada sobre los pares (c, t). Con ``opt`` entrena; sin él evalúa. Devuelve (MSE normalizado, n objetivos)."""
+def run_epoch(model, data, c, t, target_limit: int, batch_size: int, opt=None, clip: float | None = None,
+              generator=None, mask_jumps: bool = False, micro_batch: int | None = None) -> tuple[float, int]:
+    """Una pasada sobre los pares (c, t). Con ``opt`` entrena; sin él evalúa. Devuelve (MSE normalizado, n objetivos).
+
+    Con ``micro_batch``, cada lote se procesa en partes y se acumulan los gradientes, ponderando cada parte por sus
+    objetivos: el gradiente es el del lote completo, con menos memoria de GPU.
+    """
     train = opt is not None
     model.train(train)
     n = len(t)
@@ -281,18 +287,24 @@ def run_epoch(model, data, c, t, target_limit: int, batch_size: int, opt=None, c
     se, cnt = 0.0, 0
     with torch.set_grad_enabled(train):
         for i in range(0, n, batch_size):
-            idx = order[i:i + batch_size]
-            x, y, mask, cell, el = data.batch(c[idx], t[idx], target_limit, mask_jumps)
-            pred = model(x, cell, el)
-            loss = masked_mse(pred, y, mask)
+            partes = [data.batch(c[j], t[j], target_limit, mask_jumps)
+                      for j in order[i:i + batch_size].split(micro_batch or batch_size)]
+            k_lote = sum(int(p[2].sum()) for p in partes)
             if train:
                 opt.zero_grad(set_to_none=True)
-                loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), clip)
+            for x, y, mask, cell, el in partes:
+                tf = train and getattr(model, "teacher_forcing", False)
+                pred = model(x, cell, el, y, mask) if tf else model(x, cell, el)
+                loss = masked_mse(pred, y, mask)
+                k = int(mask.sum())
+                if train:
+                    (loss * k / max(k_lote, 1)).backward()
+                se += float(loss.detach()) * k
+                cnt += k
+            if train:
+                if clip:
+                    nn.utils.clip_grad_norm_(model.parameters(), clip)
                 opt.step()
-            k = int(mask.sum())
-            se += float(loss.detach()) * k
-            cnt += k
     return se / max(cnt, 1), cnt
 
 
@@ -327,17 +339,20 @@ def fit(model, data, train_range: tuple[int, int], train_target_limit: int, cfg:
 
     gen = torch.Generator(device=data.device).manual_seed(seed)
     rng = torch.Generator().manual_seed(seed)
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
+    # Adam como todas las fuentes; weight_decay en Adam es la penalización L2 (equivale a la L2 de Khan et al.)
+    opt = torch.optim.Adam(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     max_ep = epochs or cfg["max_epochs"]
     hist, best, best_state, best_ep, wait = [], float("inf"), None, 0, 0
     for ep in range(1, max_ep + 1):
         t0 = time.time()
         phase = int(torch.randint(cfg["stride"], (1,), generator=rng))
         c, t = data.origins(*train_range, stride=cfg["stride"], phase=phase)
-        tr_mse, _ = run_epoch(model, data, c, t, train_target_limit, cfg["batch_size"], opt, cfg["clip"], gen, mask_jumps)
+        tr_mse, _ = run_epoch(model, data, c, t, train_target_limit, cfg["batch_size"], opt, cfg.get("clip"), gen, mask_jumps,
+                              cfg.get("micro_batch"))
         row = {"epoca": ep, "train_mse": tr_mse, "segundos": time.time() - t0}
         if val_pairs is not None:
-            va_mse, _ = run_epoch(model, data, *val_pairs, val_target_limit, 4 * cfg["batch_size"], mask_jumps=mask_jumps)
+            va_mse, _ = run_epoch(model, data, *val_pairs, val_target_limit, 4 * cfg.get("micro_batch", cfg["batch_size"]),
+                                  mask_jumps=mask_jumps)
             row["val_mse"] = va_mse
             if va_mse < best - 1e-5:
                 best, best_ep, wait = va_mse, ep, 0
@@ -374,14 +389,14 @@ def build_model(n_cells: int, n_features: int, cfg: dict, use_noa: bool = True) 
         sub = {k: v for k, v in cfg.items() if k != "groups"}
         return GroupModels({g: build_model(n_cells, n_features, sub, use_noa) for g in cfg["groups"]})
     if arch == "seq2seq":
-        return Seq2SeqAttention(n_cells, n_features, **{k: cfg[k] for k in SEQ2SEQ_KWARGS})
+        return Seq2SeqAttention(n_cells, n_features, **{k: cfg[k] for k in SEQ2SEQ_KWARGS},
+                                teacher_forcing=cfg.get("teacher_forcing", False))
     if arch == "mimo":
         return MIMOBiNOALSTM(cfg["n_in"], cfg["n_out"], cfg["hidden"], cfg["layers"], cfg["dropout"])
     if arch == "tcn":
         return TCNMultiOutput(cfg["n_in"], cfg["n_out"], cfg["channels"], dropout=cfg["dropout"])
     if arch == "stgru":
-        return STGRU(torch.as_tensor(cfg["adjacency"], dtype=torch.float32), cfg["n_features"], cfg["gcn_dim"],
-                     cfg["hidden"], cfg["dropout"])
+        return STGRU(cfg["n_in"], cfg["n_out"], cfg["hidden"], cfg["layers"], cfg["dropout"])
     return VoltCastNet(n_cells, n_features, **{k: cfg[k] for k in MODEL_KWARGS}, use_noa=use_noa)
 
 
