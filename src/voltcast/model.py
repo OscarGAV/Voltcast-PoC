@@ -1,4 +1,4 @@
-"""Celda NOA-LSTM (sin tanh en la salida), Bi-NOA-LSTM y red multi-horizonte directa de VoltCast."""
+"""Celda NOA-LSTM (compuerta de salida sin sigmoide, Makri et al., 2026), Bi-NOA-LSTM y red multi-horizonte directa."""
 from __future__ import annotations
 
 import warnings
@@ -15,14 +15,15 @@ with warnings.catch_warnings():
     def lstm_scan(x_proj: Tensor, w_hh: Tensor, h: Tensor, c: Tensor, noa: bool) -> tuple[Tensor, Tensor, Tensor]:
         """Recorre la secuencia. ``x_proj`` = x·W_ihᵀ + b ya calculado, ``[T, B, 4H]``.
 
-        NOA: ``h_t = o_t ⊙ c_t`` (sin tanh); LSTM estándar: ``h_t = o_t ⊙ tanh(c_t)``.
+        NOA (Makri et al., 2026, ec. 22): la compuerta de salida es lineal, sin sigmoide, y ``h_t = o_t ⊙ tanh(c_t)``;
+        LSTM estándar: ``h_t = σ(o_t) ⊙ tanh(c_t)``.
         """
         outs: list[Tensor] = []
         for t in range(x_proj.size(0)):
             gates = x_proj[t] + torch.mm(h, w_hh.t())
             i, f, g, o = gates.chunk(4, 1)
             c = torch.sigmoid(f) * c + torch.sigmoid(i) * torch.tanh(g)
-            h = torch.sigmoid(o) * c if noa else torch.sigmoid(o) * torch.tanh(c)
+            h = (o if noa else torch.sigmoid(o)) * torch.tanh(c)
             outs.append(h)
         return torch.stack(outs), h, c
 
@@ -49,14 +50,18 @@ class NOALSTMLayer(nn.Module):
 
 
 class BiNOALSTM(nn.Module):
-    """Bi-NOA-LSTM de ``layers`` capas. Devuelve la concatenación del estado final de cada dirección."""
+    """Bi-NOA-LSTM de ``layers`` capas. Combina las dos direcciones por concatenación (``merge="concat"``) o por suma
+    (``merge="sum"``, como la Figura 4 de Makri et al., 2026) y devuelve la combinación del estado final."""
 
-    def __init__(self, input_size: int, hidden: int, layers: int = 1, dropout: float = 0.0, noa: bool = True):
+    def __init__(self, input_size: int, hidden: int, layers: int = 1, dropout: float = 0.0, noa: bool = True,
+                 merge: str = "concat"):
         super().__init__()
+        self.merge = merge
+        self.out_dim = hidden if merge == "sum" else 2 * hidden
         self.fwd = nn.ModuleList()
         self.bwd = nn.ModuleList()
         for k in range(layers):
-            n_in = input_size if k == 0 else 2 * hidden
+            n_in = input_size if k == 0 else self.out_dim
             self.fwd.append(NOALSTMLayer(n_in, hidden, noa))
             self.bwd.append(NOALSTMLayer(n_in, hidden, noa))
         self.drop = nn.Dropout(dropout)
@@ -67,8 +72,8 @@ class BiNOALSTM(nn.Module):
                 x = self.drop(x)
             of, hf = f(x)
             ob, hb = b(x.flip(1))
-            x = torch.cat([of, ob.flip(1)], dim=-1)
-        return torch.cat([hf, hb], dim=-1)
+            x = of + ob.flip(1) if self.merge == "sum" else torch.cat([of, ob.flip(1)], dim=-1)
+        return hf + hb if self.merge == "sum" else torch.cat([hf, hb], dim=-1)
 
 
 class VoltCastNet(nn.Module):
@@ -167,12 +172,12 @@ class MIMOBiNOALSTM(nn.Module):
     """
 
     def __init__(self, n_in: int, n_out: int, hidden: int = 128, layers: int = 1, dropout: float = 0.2,
-                 horizon: int = config.HORIZON_DAYS, use_noa: bool = True):
+                 horizon: int = config.HORIZON_DAYS, use_noa: bool = True, merge: str = "sum"):
         super().__init__()
         self.n_out, self.horizon = n_out, horizon
-        self.encoder = BiNOALSTM(n_in, hidden, layers, dropout, noa=use_noa)
+        self.encoder = BiNOALSTM(n_in, hidden, layers, dropout, noa=use_noa, merge=merge)
         self.drop = nn.Dropout(dropout)
-        self.proj = nn.Linear(2 * hidden, horizon * n_out)
+        self.proj = nn.Linear(self.encoder.out_dim, horizon * n_out)
 
     def forward(self, x: Tensor, cell: Tensor | None = None, el_flag: Tensor | None = None) -> Tensor:
         return self.proj(self.drop(self.encoder(x))).view(-1, self.horizon, self.n_out)
@@ -222,17 +227,18 @@ class TCNBlock(nn.Module):
 
 class TCNMultiOutput(nn.Module):
     """Propuesta D: TCN multi-salida. Canales de entrada = celdas + covariables ``[B, L, n_in]``; bloques residuales
-    causales dilatados (1, 2, 4, 8: con kernel 3 el campo receptivo es de 61 días, más que la ventana) y una capa
-    densa que proyecta en paralelo ``[B, H, n_out]`` (Duan; Palan, Tabla 4: 64 canales, kernel 3, 4 capas).
+    causales dilatados (dilatación 2^k en el bloque k) con ``channels`` filtros por bloque y una capa densa que proyecta
+    en paralelo ``[B, H, n_out]``. Duan et al. (2026): 3 capas de 32, 64 y 128 filtros, kernel 3.
     """
 
-    def __init__(self, n_in: int, n_out: int, channels: int = 64, kernel: int = 3,
-                 dilations: tuple = (1, 2, 4, 8), dropout: float = 0.2, horizon: int = config.HORIZON_DAYS):
+    def __init__(self, n_in: int, n_out: int, channels=(32, 64, 128), kernel: int = 3, dropout: float = 0.2,
+                 horizon: int = config.HORIZON_DAYS):
         super().__init__()
         self.n_out, self.horizon = n_out, horizon
-        self.blocks = nn.Sequential(*[TCNBlock(n_in if i == 0 else channels, channels, kernel, d, dropout)
-                                      for i, d in enumerate(dilations)])
-        self.head = nn.Linear(channels, horizon * n_out)
+        canales = [channels] * 4 if isinstance(channels, int) else list(channels)
+        self.blocks = nn.Sequential(*[TCNBlock(n_in if i == 0 else canales[i - 1], c, kernel, 2 ** i, dropout)
+                                      for i, c in enumerate(canales)])
+        self.head = nn.Linear(canales[-1], horizon * n_out)
 
     def forward(self, x: Tensor, cell: Tensor | None = None, el_flag: Tensor | None = None) -> Tensor:
         z = self.blocks(x.transpose(1, 2))[:, :, -1]  # representación en t0
@@ -393,9 +399,11 @@ def build_model(n_cells: int, n_features: int, cfg: dict, use_noa: bool = True) 
         return Seq2SeqAttention(n_cells, n_features, **{k: cfg[k] for k in SEQ2SEQ_KWARGS},
                                 teacher_forcing=cfg.get("teacher_forcing", False))
     if arch == "mimo":
-        return MIMOBiNOALSTM(cfg["n_in"], cfg["n_out"], cfg["hidden"], cfg["layers"], cfg["dropout"])
+        return MIMOBiNOALSTM(cfg["n_in"], cfg["n_out"], cfg["hidden"], cfg["layers"], cfg["dropout"],
+                             merge=cfg.get("merge", "sum"))
     if arch == "tcn":
-        return TCNMultiOutput(cfg["n_in"], cfg["n_out"], cfg["channels"], dropout=cfg["dropout"])
+        return TCNMultiOutput(cfg["n_in"], cfg["n_out"], cfg["channels"], kernel=cfg.get("kernel", 3),
+                              dropout=cfg["dropout"])
     if arch == "stgru":
         return STGRU(cfg["n_in"], cfg["n_out"], cfg["hidden"], cfg["layers"], cfg["dropout"])
     return VoltCastNet(n_cells, n_features, **{k: cfg[k] for k in MODEL_KWARGS}, use_noa=use_noa)

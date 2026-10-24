@@ -47,6 +47,17 @@ def calendar_features(dates: pd.DatetimeIndex) -> pd.DataFrame:
                          "dow_cos": np.cos(dow)}, index=dates)
 
 
+def calendario_palan(dates: pd.DatetimeIndex) -> np.ndarray:
+    """Variables cíclicas de calendario de la Propuesta C (A. Palan & N, 2026): día de la semana, mes y día del año, cada
+    uno como seno y coseno ``[T, 6]``. La fuente agrega además el intervalo del día, que no aplica a datos diarios."""
+    cols = []
+    for valor, periodo in ((dates.dayofweek.to_numpy(), 7), (dates.month.to_numpy() - 1, 12),
+                           (dates.dayofyear.to_numpy(), 365.25)):
+        ang = 2 * np.pi * valor / periodo
+        cols += [np.sin(ang), np.cos(ang)]
+    return np.column_stack(cols)
+
+
 def causal_ffill(x: np.ndarray) -> np.ndarray:
     """Rellena cada NaN con el último valor anterior (solo pasado, sin fuga). ``x [T, K]``."""
     return pd.DataFrame(x).ffill().to_numpy()

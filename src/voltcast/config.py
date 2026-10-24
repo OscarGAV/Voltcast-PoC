@@ -107,7 +107,8 @@ FUSION_ALPHAS = [round(0.30 + 0.01 * i, 2) for i in range(41)]  # α ∈ [0,3; 0
 # Propuesta A (Makri et al., 2026): modos BO-VMD + RFR-SHAP + Min-Max + Bi-NOA-LSTM MIMO
 # Óptimo que Makri obtuvo con SOMA (Tabla 6): 3 capas de 51 unidades, dropout 0, lr 3e-3, lote 16, 150 épocas, Adam
 MIMO_TRAIN = {"arch": "mimo", "layers": 3, "hidden": 51, "dropout": 0.0, "lr": 3e-3, "weight_decay": 0.0, "clip": None,
-              "batch_size": 16, "stride": 1, "max_epochs": 150}
+              "batch_size": 16, "stride": 1, "max_epochs": 150,
+              "merge": "sum"}  # direcciones de la Bi-NOA-LSTM sumadas (Makri, Fig. 4)
 RFR_TREES = 100  # árboles del Random Forest de RFR-SHAP (Makri, sec. 3.3); el resto, valores por defecto de scikit-learn
 RFR_TOP = 12  # variables elegidas por SHAP (Makri, sec. 2.2 y 3.3)
 
@@ -117,7 +118,8 @@ STGRU = {"arch": "stgru", "hidden": 512, "layers": 2, "dropout": 0.2, "lr": 7.69
          "clip": None, "batch_size": 64, "micro_batch": 16,  # lote de 64 en 4 partes (mismo gradiente; 8 GB de GPU)
          "stride": 1, "max_epochs": 90, "patience": 20}
 # Propuesta D: TCN multi-salida (Duan: lr 1e-3, lote 32; Palan, Tabla 4: 64 canales, kernel 3, 4 capas, dropout 0,2)
-TCN = {"arch": "tcn", "channels": 64, "dropout": 0.2, "lr": 1e-3, "weight_decay": 0.0, "clip": None,
+TCN = {"arch": "tcn", "channels": [32, 64, 128], "kernel": 3,  # Duan et al. (2026): 3 capas de 32, 64 y 128 filtros
+       "dropout": 0.2, "lr": 1e-3, "weight_decay": 0.0, "clip": None,
        "batch_size": 32, "stride": 1, "max_epochs": 200, "patience": 20}
 
 # Umbrales de calidad usados en EDA y Silver
