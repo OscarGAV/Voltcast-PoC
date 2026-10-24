@@ -552,6 +552,37 @@ Surgió de una revisión completa de `config.py`, de los módulos de `src/voltca
 
 ---
 
+## 10.7 Auditoría de fidelidad a las fuentes (24-10-2026, rama `feature/fidelidad-fuentes`)
+
+La fundamentación anterior revisó los **valores** de cada modelo contra su fuente, pero no su **formulación**. Al revisarla contra el texto de cada artículo se encontraron estas diferencias y se corrigieron:
+
+| # | Modelo | Fuente | Antes | Ahora |
+|---|---|---|---|---|
+| 1 | A y Bi-NOA-LSTM propia | Makri, sec. 2.3.1, ec. 22 | La celda NOA quitaba la tanh del estado oculto (hₜ = σ(oₜ)·Cₜ) | Compuerta de salida lineal, sin sigmoide: hₜ = oₜ·tanh(Cₜ) |
+| 3 | A | Makri, Fig. 4 | Direcciones de la Bi-NOA-LSTM concatenadas | Direcciones sumadas |
+| 5 | C | A. Palan & N, sección de datos | Entrada: celdas + kA | Más el calendario cíclico de la fuente: seno y coseno del día de la semana, el mes y el día del año (el intervalo del día no aplica a datos diarios) |
+| 6 | D | Duan, descripción del TCN | 4 capas de 64 filtros (Palan, Tabla 4: la fuente de C) | 3 capas de 32, 64 y 128 filtros, kernel 3 (Duan) |
+| 7 | Modelo propio | Makri, Tabla 3 | "64 / 1: modelo base de Makri" | La cita corresponde a su Bi-NOA-LSTM base (64 / 1); su Bi-LSTM base tiene 128. Solo se corrige la cita |
+
+**No se corrigen, y se documentan como límite:**
+- **#2. Salida por modos de A.** Makri pronostica cada modo VMD y suma los modos pronosticados (ec. 24–25). Aplicarlo a 150 celdas × 15 modos × 180 días daría 405 000 salidas por muestra y una capa de salida de ~40 millones de parámetros, así que se mantiene la salida directa del voltaje.
+- **#4. Ventana de A.** Makri usa una ventana igual al horizonte. Se mantiene la ventana de 30 días de los modelos del Benchmarking (sección 6.3; probarla queda como mejora #6).
+
+**Adaptación necesaria en A (medición).** Con la celda de la fuente y las 150 épocas fijas de Makri, el entrenamiento diverge. El MSE de train baja hasta las épocas 28–43 y luego llega a ~10¹⁵–10²¹ o NaN, también con recorte de gradiente de norma 1,0, que no se adopta por no aportar. Se usan esas 150 épocas como **máximo**, con early stopping de paciencia 20 sobre los últimos 270 días de train, como el resto de los modelos, y luego se reentrena hasta la época elegida. En A1 (EL B) y A2 el reentrenamiento volvió a diverger, así que se usa el modelo del early stopping.
+
+**Efecto en la evaluación** (RMSE 1–180 días):
+
+| Modelo | Antes | Ahora |
+|---|---|---|
+| Bi-LSTM propia | 0,0535 | 0,0535 (sin cambios) |
+| Bi-NOA-LSTM propia | 0,0540 | 0,0539 |
+| C · ST-GRU | 0,1298 | 0,1181 |
+| D · TCN | 0,1493 | 0,1269 |
+| A1 | 0,1803 | 0,1852 |
+| A2 | 0,2003 | 0,1846 |
+
+Las conclusiones se mantienen. La Bi-LSTM cumple el requisito de finalización y C1, C2 y C4, y supera con significancia al mejor del Benchmarking: a 60 días frente a C, ΔRMSE −0,068 V, y a 180 días frente a D, −0,055 V. A, C y D siguen por detrás de los tres métodos de referencia.
+
 ## 11. Mejoras posibles (no se ejecutan en esta PoC)
 
 Quedan documentadas como trabajo futuro. Ninguna es necesaria para fundamentar la configuración actual, pero cada una eliminaría una limitación declarada.

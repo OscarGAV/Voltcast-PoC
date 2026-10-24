@@ -1,5 +1,5 @@
 horizonte,modelo propio,mejor del Benchmarking,ΔRMSE (V),IC95 inf,IC95 sup,conclusión
-60,Propio · Bi-NOA-LSTM,C · ST-GRU (Bench. 2.º),-0.07819397617144475,-0.09038877668481023,-0.06742880075160057,propio mejor (significativo)
-60,Propio · Bi-LSTM,C · ST-GRU (Bench. 2.º),-0.07823583587988057,-0.09072849608050776,-0.06740138163533661,propio mejor (significativo)
-180,Propio · Bi-NOA-LSTM,C · ST-GRU (Bench. 2.º),-0.06272033848201113,-0.07171206458022521,-0.05474296841738592,propio mejor (significativo)
-180,Propio · Bi-LSTM,C · ST-GRU (Bench. 2.º),-0.06281902360703642,-0.07188786045931861,-0.05469410125228169,propio mejor (significativo)
+60,Propio · Bi-NOA-LSTM,C · ST-GRU (Bench. 2.º),-0.0664908116248574,-0.07948254344872917,-0.055793502893679216,propio mejor (significativo)
+60,Propio · Bi-LSTM,C · ST-GRU (Bench. 2.º),-0.06748511440892778,-0.08089707602856738,-0.05676107106541516,propio mejor (significativo)
+180,Propio · Bi-NOA-LSTM,D · TCN (Bench. 3.º),-0.05486057789725299,-0.06495855818439603,-0.045771057688503876,propio mejor (significativo)
+180,Propio · Bi-LSTM,D · TCN (Bench. 3.º),-0.054630210267828175,-0.0644285580186017,-0.04581388550624852,propio mejor (significativo)

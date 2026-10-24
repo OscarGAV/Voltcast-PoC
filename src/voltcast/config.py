@@ -106,8 +106,11 @@ FUSION_ALPHAS = [round(0.30 + 0.01 * i, 2) for i in range(41)]  # α ∈ [0,3; 0
 
 # Propuesta A (Makri et al., 2026): modos BO-VMD + RFR-SHAP + Min-Max + Bi-NOA-LSTM MIMO
 # Óptimo que Makri obtuvo con SOMA (Tabla 6): 3 capas de 51 unidades, dropout 0, lr 3e-3, lote 16, 150 épocas, Adam
+# Con la celda NOA de Makri (compuerta de salida lineal) y 150 épocas fijas el entrenamiento diverge (medido: el MSE de
+# train baja hasta las épocas 28-43 y luego llega a ~1e15-1e21 o NaN, también con recorte de gradiente 1,0). Se usan
+# las 150 épocas de Makri como máximo, con early stopping de paciencia 20 como el resto de los modelos de la PoC.
 MIMO_TRAIN = {"arch": "mimo", "layers": 3, "hidden": 51, "dropout": 0.0, "lr": 3e-3, "weight_decay": 0.0, "clip": None,
-              "batch_size": 16, "stride": 1, "max_epochs": 150,
+              "batch_size": 16, "stride": 1, "max_epochs": 150, "patience": 20,
               "merge": "sum"}  # direcciones de la Bi-NOA-LSTM sumadas (Makri, Fig. 4)
 RFR_TREES = 100  # árboles del Random Forest de RFR-SHAP (Makri, sec. 3.3); el resto, valores por defecto de scikit-learn
 RFR_TOP = 12  # variables elegidas por SHAP (Makri, sec. 2.2 y 3.3)
