@@ -10,19 +10,20 @@ Evaluación sobre 486 días de validación (abr-2025 → ago-2026), 70 fechas de
 
 | Puesto | Modelo | RMSE 1–180 d | MAE 1–180 d | RMSE 180 d |
 |---|---|---|---|---|
-| 1 | **Propio · Bi-LSTM** (modelo elegido) | **0,0535 V** | **0,0240 V** | **0,0679 V** |
-| 2 | Propio · Bi-NOA-LSTM | 0,0540 V | 0,0245 V | 0,0680 V |
+| 1 | **Propio · Bi-LSTM** (modelo elegido) | **0,0535 V** | 0,0240 V | 0,0679 V |
+| 2 | Propio · Bi-NOA-LSTM | 0,0539 V | **0,0238 V** | **0,0677 V** |
 | 3 | Persistencia (referencia) | 0,0604 V | 0,0336 V | 0,0787 V |
 | 4 | ETS · Holt, método del pronóstico de Power BI (referencia) | 0,0678 V | 0,0316 V | 0,0951 V |
 | 5 | Tendencia lineal (referencia) | 0,1158 V | 0,0463 V | 0,1972 V |
-| 6 | C · ST-GRU (Benchmarking 2.º) | 0,1298 V | 0,1037 V | 0,1307 V |
-| 7 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1493 V | 0,1048 V | 0,1675 V |
-| 8 | A1 · modos BO-VMD + RFR-SHAP + Bi-NOA-LSTM, MIMO por electrolizador (Benchmarking 1.º) | 0,1803 V | 0,1311 V | 0,1620 V |
-| 9 | A2 · ídem, MIMO conjunto (Benchmarking 1.º) | 0,2003 V | 0,1524 V | 0,1870 V |
+| 6 | C · ST-GRU (Benchmarking 2.º) | 0,1181 V | 0,0957 V | 0,1228 V |
+| 7 | D · TCN Multi-Output (Benchmarking 3.º) | 0,1269 V | 0,1000 V | 0,1225 V |
+| 8 | A2 · modos BO-VMD + RFR-SHAP + Bi-NOA-LSTM, MIMO conjunto (Benchmarking 1.º) | 0,1846 V | 0,1372 V | 0,1655 V |
+| 9 | A1 · ídem, MIMO por electrolizador (Benchmarking 1.º) | 0,1852 V | 0,1369 V | 0,2188 V |
 
-- **Nuestras variantes son las mejores en todas las métricas y horizontes.** La Bi-LSTM supera a la persistencia en un 11 % de RMSE y un 29 % de MAE, y al mejor modelo del Benchmarking con significancia a 60 y 180 días.
+- **Nuestras variantes son las mejores en todas las métricas y horizontes.** La Bi-LSTM tiene el menor RMSE de 1 a 180 días y a 60 días; la Bi-NOA-LSTM, el menor MAE y el menor RMSE a 180 días, con diferencias de menos de 0,001 V entre ambas. La Bi-LSTM supera a la persistencia en un 11 % de RMSE y un 29 % de MAE, y al mejor modelo del Benchmarking con significancia: a 60 días frente a C (ΔRMSE −0,067 V) y a 180 días frente a D (−0,055 V).
 - **Frente a Power BI:** supera a ETS (Holt) en todas las métricas y horizontes, también con las otras formas de elegir sus parámetros (sección 4.1 del notebook 07).
-- **Los modelos del Benchmarking, implementados con la configuración que publican sus fuentes, quedan por detrás de los tres baselines.** Fallan ya a 1 día por un error de nivel: pronostican el voltaje absoluto y tiran hacia el nivel de train de cada celda. Se verificó reentrenando D relativo a un ancla: su error a 1 día baja de 0,127 a 0,016 V. El ranking empírico (C > D > A) no coincide con el de la literatura (A > C > D).
+- **Los modelos del Benchmarking, implementados con la configuración y la formulación que publican sus fuentes, quedan por detrás de los tres baselines.** Fallan ya a 1 día por un error de nivel: pronostican el voltaje absoluto y tiran hacia el nivel de train de cada celda (a 1 día, D tiene 0,108 V de RMSE y la Bi-LSTM 0,007 V). Se verificó con la versión anterior de D, reentrenándolo relativo a un ancla: su error a 1 día bajó de 0,127 a 0,016 V. El ranking empírico (C > D > A) no coincide con el de la literatura (A > C > D).
+- **Auditoría de fidelidad a las fuentes** (24-10-2026): se corrigió la formulación de A, C, D y de la celda NOA según el texto de cada artículo, y A pasó a usar early stopping porque con la celda de Makri y 150 épocas fijas su entrenamiento diverge ([`docs/hiperparametros.md`](docs/hiperparametros.md), 10.7). Las conclusiones no cambiaron.
 - **Propuesta B descartada** (22-10-2026): la PoC compara las 3 propuestas mejor puntuadas del Benchmarking. B es la 4.ª y la peor en latencia, y fijar sus dos hiperparámetros sin fuente requería ~18 h de GPU ([`docs/hiperparametros.md`](docs/hiperparametros.md), 4.3).
 - **Requisito de finalización: cumplido.** La Bi-LSTM cumple los criterios de la documentación del proyecto (OB2 Tabla 10 / RNF-06: MAE < 5 %, RMSE < 0,15 V, MAPE < 5 %, R² > 0) en todos los horizontes y supera a A1, A2, C y D en las 5 métricas; ninguno de ellos cumple el requisito (R² < 0). Ver [`docs/metricas.md`](docs/metricas.md).
 - **Criterios comparativos C1–C4** (complementarios): la Bi-LSTM cumple C1, C2 y C4 en todos los horizontes y C3 salvo a 180 días (94,7 % de las celdas con RMSE < 0,15 V, frente al 95 % pedido).
@@ -67,8 +68,8 @@ Abrir los notebooks con el kernel **VoltCast (.venv 3.13)** y ejecutarlos en ord
 | `05b_preparacion_gold_kalman` | 3 | Filtro de Kalman de Khan (solo registro: Propuesta B descartada) | 5 min |
 | `06_modelado` | 4 | **Nuestras variantes:** Bi-NOA-LSTM y Bi-LSTM | 10 min |
 | `06b_modelado_seq2seq_kalman` | 4 | Propuesta B (solo registro, descartada; no se ejecutó con la configuración final) | — |
-| `06c_modelado_propuesta_a` | 4 | Propuesta A (A1 y A2): modos BO-VMD + RFR-SHAP + Bi-NOA-LSTM MIMO con el óptimo de Makri | 2 h |
-| `06d_modelado_stgru_tcn` | 4 | Propuestas C (ST-GRU) y D (TCN) | 55 min |
+| `06c_modelado_propuesta_a` | 4 | Propuesta A (A1 y A2): modos BO-VMD + RFR-SHAP + Bi-NOA-LSTM MIMO con el óptimo de Makri | 1,6 h de entrenamiento |
+| `06d_modelado_stgru_tcn` | 4 | Propuestas C (ST-GRU) y D (TCN) | 35 min de entrenamiento |
 | `06e_mejora_modelo_propio` | 4 | **Intento descartado** (solo registro): ensamble de 5 semillas + riesgo de intervención, elegido con validación cruzada dentro de train | 30 min |
 | `07_evaluacion` | 5 | Comparación de los 9 modelos, ranking y conclusiones | 10 min |
 
@@ -91,6 +92,7 @@ Poc-TP1/
 │   ├── features.py        # RFR-SHAP
 │   ├── soma.py            # SOMA (no se usa: la Propuesta A adopta el óptimo publicado por Makri)
 │   ├── model.py           # celda NOA, Bi-NOA-LSTM, Seq2Seq, MIMO, ST-GRU, TCN, entrenamiento
+│   ├── riesgo.py          # riesgo de intervención (intento descartado, notebook 06e)
 │   └── metrics.py         # métricas y baselines
 ├── data/                  # raw, bronze, silver, gold (local, no versionado)
 ├── models/                # pesos (.pt, no versionados) y parámetros de los filtros (.json)
@@ -100,7 +102,7 @@ Poc-TP1/
 
 ## Nuestro modelo
 
-**Bi-LSTM con canal independiente** (`06_modelado`), elegida por tener el menor error y ser la más rápida (~2 min de entrenamiento, ~2 ms para pronosticar las 300 celdas). Sus diferencias con los modelos del Benchmarking:
+**Bi-LSTM con canal independiente** (`06_modelado`), elegida por tener el menor RMSE de 1 a 180 días y ser la más rápida (~1 min de entrenamiento, ~2 ms para pronosticar las 300 celdas). Sus diferencias con los modelos del Benchmarking:
 
 1. **Pronóstico relativo al nivel reciente (ancla)** de la celda, en lugar del voltaje absoluto. Es lo que evita el sesgo de nivel que hunde a los modelos MIMO.
 2. **Una celda por muestra con pesos compartidos** entre las 300 celdas (identidad por embedding), lo que multiplica los ejemplos de entrenamiento.
@@ -111,11 +113,7 @@ Poc-TP1/
 
 - Notebook 08 (despliegue): función `predecir(fecha, celda)`, exportación de pronósticos y plan de monitoreo y reentrenamiento.
 - Criterios comparativos abiertos (complementarios, no bloquean la finalización): C1 y C2 a 60 días, C3 a 180 días y C4. El error dominante son las intervenciones de mantenimiento, cuyo momento no se puede anticipar con los datos.
-- **Fundamentar todas las configuraciones** según [`docs/hiperparametros.md`](docs/hiperparametros.md):
-  - cada modelo del Benchmarking pasa a usar el óptimo que publica su fuente (camino 1);
-  - nuestra Bi-LSTM mantiene los valores que coinciden con fuentes y busca con una grilla chica el ancla y el embedding;
-  - antes de reentrenar se hacen las pruebas cortas de umbrales de limpieza y ventana (sección 8 del documento);
-  - después se reentrenan todos los modelos y se vuelve a ejecutar el notebook 07. Los resultados de este README van a cambiar.
+- Mejoras posibles, que no se ejecutan en esta PoC: ver [`docs/hiperparametros.md`](docs/hiperparametros.md), sección 11.
 
 ## Decisiones
 
